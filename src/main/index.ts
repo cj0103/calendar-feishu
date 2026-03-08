@@ -43,20 +43,23 @@ function saveWindowConfig(config: { x: number; y: number; width: number; height:
     console.error('Failed to save window config:', error)
   }
 }
-    writeFileSync(WINDOW_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
-  } catch (error) {
-    console.error('Failed to save window config:', error)
-  }
-}
 
 function createTray(): void {
   let trayIcon: nativeImage
   
   if (is.dev) {
-    trayIcon = nativeImage.createEmpty()
-    const canvas = { width: 16, height: 16 }
-    trayIcon = nativeImage.createFromBuffer(Buffer.from(new Array(canvas.width * canvas.height * 4).fill(255)), { width: canvas.width, height: canvas.height })
+    // 开发环境：从 build 目录加载
+    const iconPath = join(__dirname, '../../build/icon.png')
+    try {
+      trayIcon = nativeImage.createFromPath(iconPath)
+      if (trayIcon.isEmpty()) {
+        trayIcon = nativeImage.createEmpty()
+      }
+    } catch {
+      trayIcon = nativeImage.createEmpty()
+    }
   } else {
+    // 生产环境：从 resources 目录加载
     const iconPath = join(process.resourcesPath, 'icon.png')
     try {
       trayIcon = nativeImage.createFromPath(iconPath)
