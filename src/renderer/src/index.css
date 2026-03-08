@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.calendar-cell {
+  background: white;
+  min-height: 100px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.calendar-cell.today {
+  background: rgba(64, 158, 255, 0.15);
+  border: 2px solid #409eff;
+}
+
+.event-high {
+  color: #f56c6c;
+}
+
+.event-medium {
+  color: #e6a23c;
+}
+
+.event-low {
+  color: #909399;
+}
