@@ -527,7 +527,7 @@ function App(): JSX.Element {
     setContextMenu(null)
   }
 
-  const calendarDays = getCalendarDays(viewDate.getFullYear(), viewDate.getMonth())
+  const calendarDays = getCalendarDays(calendarBaseDate.getFullYear(), calendarBaseDate.getMonth())
 
   return (
     <div 
