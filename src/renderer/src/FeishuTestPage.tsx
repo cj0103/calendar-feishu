@@ -73,11 +73,15 @@ export function FeishuTestPage(): JSX.Element {
         setCalendars(result.calendars || [])
         console.log('✅ 加载日历列表成功:', result.calendars?.length)
       } else {
-        setError(result.error || '加载日历列表失败')
+        // 显示详细错误信息
+        const errorMsg = result.error || '加载日历列表失败'
+        const hint = result.hint ? `\n\n💡 ${result.hint}` : ''
+        console.error('❌ 加载日历列表失败:', errorMsg)
+        setError(errorMsg + hint)
       }
     } catch (err: any) {
       console.error('❌ 加载日历列表失败:', err)
-      setError(err.message || '加载日历列表失败')
+      setError(`加载失败：${err.message || '未知错误'}\n\n💡 请检查：\n1. 飞书应用配置是否正确（App ID 和 App Secret）\n2. 应用是否已发布并启用\n3. 是否添加了日历相关权限`)
     } finally {
       setIsLoadingCalendars(false)
     }
@@ -396,15 +400,6 @@ export function FeishuTestPage(): JSX.Element {
       
       {/* 日程获取与同步控制区域 */}
       <div className="mb-4 p-4 bg-gray-100 rounded">
-        <div className="mb-2">
-          <label className="block text-sm font-medium mb-1">日历 ID:</label>
-          <input
-            type="text"
-            value={calendarId}
-            onChange={(e) => setCalendarId(e.target.value)}
-            className="w-full p-2 border rounded"
-          />
-        </div>
         <div className="mb-2">
           <label className="block text-sm font-medium mb-1">日历 ID:</label>
           <input

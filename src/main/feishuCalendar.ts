@@ -67,20 +67,33 @@ class FeishuCalendarAPI {
    * 获取 HTTP 客户端（带认证头）
    */
   private async getHttpClient() {
-    // 直接使用 tenant_access_token
-    const tokenResult = await feishuAuth.getTenantAccessToken()
-    if (!tokenResult || !tokenResult.tenant_access_token) {
-      throw new Error('未获取到 tenant_access_token，请先授权')
-    }
-    
-    return axios.create({
-      baseURL: this.baseUrl,
-      timeout: FEISHU_CONFIG.timeout,
-      headers: {
-        'Authorization': `Bearer ${tokenResult.tenant_access_token}`,
-        'Content-Type': 'application/json'
+    try {
+      // 直接使用 tenant_access_token
+      console.log('🔑 正在获取 tenant_access_token...')
+      const tokenResult = await feishuAuth.getTenantAccessToken()
+      if (!tokenResult || !tokenResult.tenant_access_token) {
+        console.error('❌ 未获取到 tenant_access_token')
+        throw new Error('未获取到 tenant_access_token，请检查飞书应用配置')
       }
-    })
+      
+      console.log('✅ 成功获取 tenant_access_token')
+      return axios.create({
+        baseURL: this.baseUrl,
+        timeout: FEISHU_CONFIG.timeout,
+        headers: {
+          'Authorization': `Bearer ${tokenResult.tenant_access_token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    } catch (error: any) {
+      console.error('❌ 获取 HTTP 客户端失败:', error)
+      console.error('错误详情:', {
+        message: error.message,
+        response: error.response?.data,
+        appId: FEISHU_CONFIG.appId
+      })
+      throw new Error(`获取授权失败：${error.message}\n\n请检查：\n1. App ID: ${FEISHU_CONFIG.appId}\n2. App Secret 配置是否正确\n3. 应用是否已发布\n4. 网络连接是否正常`)
+    }
   }
 
   /**

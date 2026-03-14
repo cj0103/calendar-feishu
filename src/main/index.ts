@@ -413,15 +413,22 @@ app.whenReady().then(() => {
   // 使用 tenant_access_token 获取日历列表（推荐方式）
   ipcMain.handle('feishu:getCalendarList', async () => {
     try {
+      console.log('📋 开始获取日历列表...')
       // 直接使用 feishuCalendarAPI 的方法（已使用 tenant_access_token）
       const calendars = await feishuCalendarAPI.getCalendarList()
+      console.log('✅ 获取日历列表成功，共', calendars.length, '个日历')
       return { success: true, calendars }
     } catch (error: any) {
-      console.error('获取日历列表失败:', error)
+      console.error('❌ 获取日历列表失败:', error)
+      console.error('错误详情:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      })
       return { 
         success: false, 
         error: error.message || '获取日历列表失败',
-        hint: '请检查飞书应用配置和权限设置'
+        hint: `请检查：\n1. App ID 和 App Secret 是否正确（当前配置：${FEISHU_CONFIG.appId}）\n2. 应用是否已发布并启用\n3. 是否添加了"获取日历列表"相关权限\n4. 网络连接是否正常`
       }
     }
   })
