@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CalendarEvent, CalendarDayInfo, Settings } from '../types'
 import SettingsModal from './SettingsModal'
 import ExportModal from './ExportModal'
@@ -163,11 +163,13 @@ function App(): JSX.Element {
       })
     }
     
-    window.api?.onWindowMoved(handleMove)
-    window.api?.onWindowResized(handleResize)
+    const cleanupMove = window.api?.onWindowMoved(handleMove)
+    const cleanupResize = window.api?.onWindowResized(handleResize)
     
     return () => {
-      // 清理监听（如果需要）
+      // 清理监听器，防止内存泄漏
+      cleanupMove?.()
+      cleanupResize?.()
     }
   }, [])
 
@@ -301,12 +303,20 @@ function App(): JSX.Element {
     }
   }
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>): void => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    setMousePosition({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    })
+  // 使用 useMemo 实现节流鼠标移动监听（100ms）
+  const handleMouseMove = useMemo(() => {
+    let lastCall = 0
+    return (e: React.MouseEvent<HTMLDivElement>) => {
+      const now = Date.now()
+      if (now - lastCall >= 100) {
+        lastCall = now
+        const rect = e.currentTarget.getBoundingClientRect()
+        setMousePosition({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        })
+      }
+    }
   }, [])
 
   const handleSettings = (): void => {
@@ -427,14 +437,28 @@ function App(): JSX.Element {
     return `${(h || '0').padStart(2, '0')}${(m || '0').padStart(2, '0')}`
   }
 
-  const getEventsForDay = (date: string): CalendarEvent[] => {
-    return events
-      .filter(event => event.date === date)
-      .sort((a, b) => {
+  // 使用 useMemo 缓存按日期分组的日程
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>()
+    events.forEach(event => {
+      if (!map.has(event.date)) {
+        map.set(event.date, [])
+      }
+      map.get(event.date)!.push(event)
+    })
+    // 排序
+    map.forEach(eventsList => {
+      eventsList.sort((a, b) => {
         const timeA = formatTimeForSort(a.time)
         const timeB = formatTimeForSort(b.time)
         return timeA.localeCompare(timeB)
       })
+    })
+    return map
+  }, [events])
+
+  const getEventsForDay = (date: string): CalendarEvent[] => {
+    return eventsByDate.get(date) || []
   }
 
   const handleDayDoubleClick = (date: string): void => {
@@ -527,7 +551,10 @@ function App(): JSX.Element {
     setContextMenu(null)
   }
 
-  const calendarDays = getCalendarDays(calendarBaseDate.getFullYear(), calendarBaseDate.getMonth())
+  // 使用 useMemo 缓存日历计算结果
+  const calendarDays = useMemo(() => {
+    return getCalendarDays(calendarBaseDate.getFullYear(), calendarBaseDate.getMonth())
+  }, [calendarBaseDate])
 
   return (
     <div 
