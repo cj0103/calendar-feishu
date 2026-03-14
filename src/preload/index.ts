@@ -43,5 +43,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('feishu:updateEvent', calendarId, eventId, eventData),
     deleteEvent: (calendarId: string, eventId: string) => 
       ipcRenderer.invoke('feishu:deleteEvent', calendarId, eventId)
-  }
+  },
+  // 导出功能
+  saveExportFile: (data: any, defaultPath: string) => 
+    ipcRenderer.invoke('export:saveFile', data, defaultPath)
 })

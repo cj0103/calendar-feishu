@@ -5,7 +5,6 @@ export interface CalendarEvent {
   title: string
   location: string
   importance: 'high' | 'medium' | 'low'
-  documents: string[]
   participants?: string[]
   description?: string
   
@@ -51,4 +50,26 @@ export interface SyncQueue {
   payload: CalendarEvent
   createdAt: string
   status: 'pending' | 'syncing' | 'synced' | 'failed'
+}
+
+/**
+ * 应用设置接口
+ */
+export interface Settings {
+  // 窗口设置
+  windowOpacity: number
+  windowWidth: number
+  windowHeight: number
+  windowX: number
+  windowY: number
+  
+  // 背景颜色
+  workdayColor: string
+  weekendColor: string
+  otherMonthColor: string
+  
+  // 日历文字设置
+  calendarColor: string        // 日历文字颜色
+  calendarFontSize: number     // 日历文字大小（px）
+  calendarFontFamily: string   // 日历文字字体
 }

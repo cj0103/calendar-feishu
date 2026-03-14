@@ -58,43 +58,31 @@ export function convertToLocalEvent(feishuEvent: any): CalendarEvent {
     location = feishuEvent.location.name || ''
   }
   
-  // ⭐ 从标题中提取优先级
+  // ⭐ 从 description 中提取优先级（而非标题）
   let title = feishuEvent.summary || ''
+  let description = feishuEvent.description || ''
   let importance: 'high' | 'medium' | 'low' = 'medium'
   
-  if (title.startsWith('[高]')) {
-    importance = 'high'
-    title = title.substring(3) // 移除 [高] 前缀
-  } else if (title.startsWith('[低]')) {
-    importance = 'low'
-    title = title.substring(3) // 移除 [低] 前缀
+  // 从 description 中提取优先级标记 [优先级：high/medium/low]
+  const priorityMatch = description.match(/\[优先级：(high|medium|low)\]/)
+  if (priorityMatch) {
+    importance = priorityMatch[1] as 'high' | 'medium' | 'low'
+    // 移除优先级标记行（包括换行符）
+    description = description.replace(/\[优先级：(high|medium|low)\]\n?/, '')
   }
   
   const result = {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     date: startTime.date,
     time: startTime.time,
-    title: title, // 移除优先级前缀后的标题
+    title: title, // ✅ 无前缀
     location: location,
-    description: feishuEvent.description || '',
-    importance: importance, // ⭐ 提取优先级
-    documents: [],
+    description: description.trim(), // ✅ 清理后的描述
+    importance: importance, // ✅ 提取的优先级
     feishuEventId: feishuEvent.event_id,
     endTime: endTime.toISOString(),
     lastSyncTime: Date.now()
   }
-  
-  console.log('🔄 Converted Feishu event:', {
-    feishuId: feishuEvent.event_id,
-    localId: result.id,
-    summary: feishuEvent.summary,
-    title: result.title,
-    importance: result.importance,
-    location: result.location,
-    date: result.date,
-    time: result.time,
-    status: feishuEvent.status
-  })
   
   return result
 }

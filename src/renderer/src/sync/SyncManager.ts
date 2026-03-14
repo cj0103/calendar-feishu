@@ -82,47 +82,31 @@ export class SyncManager {
   async initialize(): Promise<void> {
     this.syncToken = loadSyncToken()
     this.lastSyncTime = loadLastSyncTime()
-    console.log('SyncManager initialized', {
-      hasToken: !!this.syncToken,
-      lastSyncTime: this.lastSyncTime
-    })
   }
 
   /**
    * 执行同步
    */
   async sync(): Promise<SyncResult> {
-    console.log('🔍 [SYNC DEBUG] sync() called')
-    
     if (this.isSyncing) {
-      console.log('⚠️ [SYNC DEBUG] Sync already in progress')
       return { added: 0, updated: 0, deleted: 0, uploaded: 0 }
     }
 
     this.isSyncing = true
-    console.log('🔄 Starting sync...', {
-      hasToken: !!this.syncToken,
-      calendarId: this.calendarId
-    })
     
     try {
       let result: SyncResult
 
       if (!this.syncToken) {
         // 没有 sync_token，执行初次同步
-        console.log('📥 Performing initial sync (no sync_token)')
         result = await this.initialSync()
       } else {
         // 增量同步
-        console.log('📥 Performing incremental sync (has sync_token)')
-        console.log('📥 Current sync_token:', this.syncToken)
         result = await this.incrementalSync()
       }
 
       this.lastSyncTime = Date.now()
       saveLastSyncTime(this.lastSyncTime)
-      
-      console.log('✅ Sync completed:', result)
 
       return result
     } catch (error: any) {
@@ -152,51 +136,30 @@ export class SyncManager {
       Math.floor(endTime.getTime() / 1000)
     )
 
-    console.log('Initial sync result:', result)
-
     if (!result.success) {
       throw new Error(result.error || 'Initial sync failed')
     }
 
     // 确保 events 是数组
     const events = Array.isArray(result.events) ? result.events : []
-    console.log('Got events:', events.length, 'items')
     
     // ⭐ 过滤掉已取消的日程
     const validEvents = events.filter(event => event.status !== 'cancelled')
-    console.log('Valid events (after filtering cancelled):', validEvents.length, 'items')
 
     // 转换为本地格式
     const localEvents: CalendarEvent[] = validEvents.map(feishuEvent =>
       convertToLocalEvent(feishuEvent)
     )
 
-    console.log('Converted local events:', localEvents.length, 'items')
-    if (localEvents.length > 0) {
-      console.log('First event:', {
-        id: localEvents[0].id,
-        title: localEvents[0].title,
-        feishuEventId: localEvents[0].feishuEventId,
-        date: localEvents[0].date
-      })
-    }
-
     // 保存到本地
     this.saveEventsToLocalStorage(localEvents)
-    console.log('Saved to localStorage')
     
     // ⭐ 验证保存的数据
     const savedData = localStorage.getItem('calendar-events')
     if (savedData) {
       const parsed = JSON.parse(savedData)
-      console.log('⭐ Verification - Saved events:', parsed.length, 'items')
       if (parsed.length > 0) {
-        console.log('⭐ First saved event:', {
-          id: parsed[0].id,
-          title: parsed[0].title,
-          feishuEventId: parsed[0].feishuEventId,
-          date: parsed[0].date
-        })
+        // 数据验证通过
       }
     }
 
@@ -204,13 +167,7 @@ export class SyncManager {
     if (result.sync_token) {
       this.syncToken = result.sync_token
       saveSyncToken(result.sync_token)
-      console.log('Saved sync_token:', this.syncToken)
     }
-
-    console.log('Initial sync completed', {
-      added: localEvents.length,
-      sync_token: this.syncToken
-    })
 
     return { added: localEvents.length, updated: 0, deleted: 0 }
   }
@@ -260,7 +217,6 @@ export class SyncManager {
     for (const feishuEvent of result.events) {
       // ⭐ 跳过已取消的日程
       if (feishuEvent.status === 'cancelled') {
-        console.log('⏭️ Skipped cancelled event:', feishuEvent.event_id, feishuEvent.summary)
         continue
       }
       
@@ -273,7 +229,6 @@ export class SyncManager {
         const newEvent = convertToLocalEvent(feishuEvent)
         localEvents.push(newEvent)
         stats.added++
-        console.log('➕ Added new event (from Feishu):', newEvent.title)
       } else {
         // 判断冲突：以最后更新时间为准
         const feishuUpdateTime = parseInt(feishuEvent.updated_time) * 1000
@@ -288,10 +243,8 @@ export class SyncManager {
             localEvents[index] = updatedEvent
           }
           stats.updated++
-          console.log('🔄 Updated event (from Feishu):', updatedEvent.title)
         } else {
           // 本地更新更晚，同步到飞书
-          console.log('⏩ Local event is newer, sync to Feishu:', localEvent.title)
           await this.syncUpdateToFeishu(localEvent)
         }
       }
@@ -303,13 +256,9 @@ export class SyncManager {
     )
     
     for (const event of localOnlyEvents) {
-      console.log('⬆️ Uploading local-only event to Feishu:', event.title)
       const success = await this.syncCreateToFeishu(event)
       if (success) {
         stats.uploaded++
-        console.log('✅ Uploaded to Feishu:', event.title, '→ ID:', event.feishuEventId)
-      } else {
-        console.error('❌ Failed to upload to Feishu:', event.title)
       }
     }
 
@@ -322,7 +271,6 @@ export class SyncManager {
       saveSyncToken(result.sync_token)
     }
 
-    console.log('Incremental sync completed', stats)
     return stats
   }
 
@@ -331,29 +279,17 @@ export class SyncManager {
    */
   async syncCreateToFeishu(event: CalendarEvent): Promise<boolean> {
     try {
-      console.log('📤 Creating event in Feishu:', {
-        id: event.id,
-        title: event.title,
-        date: event.date,
-        time: event.time,
-        location: event.location,
-        hasFeishuId: !!event.feishuEventId
-      })
-      
       const startTimeStamp = toFeishuTimestamp(event.date, event.time)
       const endTimeStamp = Math.floor(new Date(event.endTime!).getTime() / 1000)
       
-      console.log('⏰ Time conversion:', {
-        date: event.date,
-        time: event.time,
-        startTimeStamp,
-        endTime: event.endTime,
-        endTimeStamp
-      })
+      // ⭐ 在 description 中添加优先级标记
+      const priorityMarker = event.importance !== 'medium' 
+        ? `[优先级：${event.importance}]\n` 
+        : ''
       
       const feishuEventData = {
-        summary: event.title,
-        description: event.description || '',
+        summary: event.title,  // ✅ 无前缀
+        description: priorityMarker + (event.description || ''),
         start_time: {
           timestamp: startTimeStamp,
           timezone: 'Asia/Shanghai'
@@ -366,37 +302,19 @@ export class SyncManager {
         location: event.location ? { name: event.location } : undefined,
         need_notification: false
       }
-
-      console.log('📦 Request data:', JSON.stringify(feishuEventData, null, 2))
       
       const result = await window.api.feishu.createEvent(
         this.calendarId,
         feishuEventData
       )
 
-      console.log('📥 API response:', result)
-      console.log('⭐ Response structure:', {
-        hasEvent: !!result.event,
-        eventKeys: result.event ? Object.keys(result.event) : [],
-        eventId: result.event?.event_id,
-        fullEvent: result.event
-      })
-      console.log('⭐ Full event JSON:', JSON.stringify(result.event, null, 2))
-
       if (result.success && result.event) {
         // ⭐ 关键：保存飞书返回的 event_id
-        console.log('⭐ Saving event_id:', result.event.event_id)
         event.feishuEventId = result.event.event_id
         event.lastSyncTime = Date.now()
         
         // 更新本地存储
         this.updateLocalEvent(event)
-        
-        console.log('✅ Created in Feishu:', {
-          localId: event.id,
-          feishuId: event.feishuEventId,
-          title: event.title
-        })
         
         return true
       }
@@ -416,17 +334,8 @@ export class SyncManager {
     try {
       // ⭐ 防御性检查：如果没有 feishuEventId，转为创建
       if (!event.feishuEventId) {
-        console.warn('⚠️ Event has no feishuEventId, creating instead of updating')
         return await this.syncCreateToFeishu(event)
       }
-      
-      console.log('📤 Updating event in Feishu:', {
-        localId: event.id,
-        feishuId: event.feishuEventId,
-        title: event.title,
-        date: event.date,
-        time: event.time
-      })
       
       const updateData: any = {}
       
@@ -434,8 +343,12 @@ export class SyncManager {
       if (event.title) {
         updateData.summary = event.title
       }
-      if (event.description !== undefined) {
-        updateData.description = event.description
+      // ⭐ 如果 description 或 importance 有变化，需要重新构建 description（包含优先级标记）
+      if (event.description !== undefined || event.importance) {
+        const priorityMarker = event.importance !== 'medium' 
+          ? `[优先级：${event.importance}]\n` 
+          : ''
+        updateData.description = priorityMarker + (event.description || '')
       }
       if (event.date && event.time) {
         updateData.start_time = {
@@ -449,9 +362,9 @@ export class SyncManager {
           timezone: 'Asia/Shanghai'
         }
       }
-      if (event.location !== undefined) {
-        // ⭐ location 作为字符串传递（飞书 API 要求）
-        updateData.location = event.location || ''
+      // ⭐ location 字段需要特殊处理：飞书 API 要求 location 是对象或省略
+      if (event.location && event.location.trim()) {
+        updateData.location = { name: event.location }
       }
       
       const result = await window.api.feishu.updateEvent(
@@ -463,11 +376,6 @@ export class SyncManager {
       if (result.success) {
         event.lastSyncTime = Date.now()
         this.updateLocalEvent(event)
-        console.log('✅ Updated in Feishu:', {
-          localId: event.id,
-          feishuId: event.feishuEventId,
-          title: event.title
-        })
         return true
       }
       return false
@@ -484,26 +392,13 @@ export class SyncManager {
     try {
       // ⭐ 防御性检查：如果没有 feishuEventId，无需删除
       if (!event.feishuEventId) {
-        console.warn('⚠️ Event has no feishuEventId, skip deletion')
         return true
       }
-      
-      console.log('🗑️ Deleting event from Feishu:', {
-        localId: event.id,
-        feishuId: event.feishuEventId,
-        title: event.title
-      })
       
       await window.api.feishu.deleteEvent(
         this.calendarId,
         event.feishuEventId
       )
-      
-      console.log('✅ Deleted from Feishu:', {
-        localId: event.id,
-        feishuId: event.feishuEventId,
-        title: event.title
-      })
       
       return true
     } catch (error) {

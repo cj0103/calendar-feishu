@@ -125,7 +125,6 @@ export function FeishuTestPage(): JSX.Element {
           title: feishuEvent.summary,
           location: feishuEvent.location?.name || '',
           importance: 'medium' as const,
-          documents: [],
           description: feishuEvent.description || '',
           feishuEventId: feishuEvent.event_id,
           endTime: new Date(parseInt(feishuEvent.end_time.timestamp) * 1000).toISOString(),

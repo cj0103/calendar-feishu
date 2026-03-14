@@ -7,6 +7,7 @@ interface EventFormData {
   title: string
   location: string
   importance: 'high' | 'medium' | 'low'
+  description: string  // 备注信息
 }
 
 interface EventFormModalProps {
@@ -31,7 +32,8 @@ export default function EventFormModal({
     time: '',
     title: '',
     location: '',
-    importance: 'medium'
+    importance: 'medium',
+    description: ''
   })
   const [errors, setErrors] = useState<{ time?: string; title?: string }>({})
 
@@ -43,7 +45,8 @@ export default function EventFormModal({
           time: editingEvent.time.replace(':', ''),
           title: editingEvent.title,
           location: editingEvent.location,
-          importance: editingEvent.importance
+          importance: editingEvent.importance,
+          description: editingEvent.description || ''
         })
       } else {
         setFormData({
@@ -51,7 +54,8 @@ export default function EventFormModal({
           time: '',
           title: '',
           location: '',
-          importance: 'medium'
+          importance: 'medium',
+          description: ''
         })
       }
       setErrors({})
@@ -155,13 +159,8 @@ export default function EventFormModal({
       timezone: 'Asia/Shanghai'
     })
     
-    // 构建标题（包含优先级）
-    let fullTitle = formData.title.trim()
-    if (formData.importance === 'high') {
-      fullTitle = `[高]${fullTitle}`
-    } else if (formData.importance === 'low') {
-      fullTitle = `[低]${fullTitle}`
-    }
+    // 标题不再添加优先级前缀
+    const fullTitle = formData.title.trim()
 
     const eventData: CalendarEvent = {
       id: editingEvent?.id || Date.now().toString(),
@@ -170,7 +169,6 @@ export default function EventFormModal({
       title: fullTitle,
       location: formData.location,
       importance: formData.importance,
-      documents: [],
       description: formData.description,
       // ⭐ 飞书同步相关字段：保留 feishuEventId 和 lastSyncTime
       feishuEventId: editingEvent?.feishuEventId,
@@ -289,6 +287,17 @@ export default function EventFormModal({
                 <span className="text-gray-500 font-medium">低</span>
               </label>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="详细信息、相关文档链接等（同步到飞书时将显示在日程描述中）"
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
           </div>
         </div>
 

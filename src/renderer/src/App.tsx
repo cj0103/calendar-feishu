@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CalendarEvent, CalendarDayInfo, Settings } from '../types'
 import SettingsModal from './SettingsModal'
+import ExportModal from './ExportModal'
 import EventFormModal from './EventFormModal'
 import { SyncManager, SyncStatus } from './sync/SyncManager'
 import { FEISHU_CONFIG } from '../../main/feishuConfig'
 import { FeishuTestPage } from './FeishuTestPage'
 import { applyOpacity } from './utils/colorUtils'
 import { holidayManager, DayType } from './utils/holidayManager'
+import { getLunarDateCached } from './utils/lunarUtils'
 
 // 星期几的显示名称
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
@@ -19,6 +21,8 @@ interface CalendarDayInfo {
   isPrevMonth: boolean
   isNextMonth: boolean
   isWeekend: boolean
+  /** 农历字符串（如"正月初一"） */
+  lunarStr?: string
 }
 
 /**
@@ -27,8 +31,8 @@ interface CalendarDayInfo {
  */
 function App(): JSX.Element {
   const today = new Date()
-  // 当前视图日期（月初）
-  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
+  // 日历基准日期（用于计算日历显示范围）
+  const [calendarBaseDate, setCalendarBaseDate] = useState(new Date())
   // 本地日程列表
   const [events, setEvents] = useState<CalendarEvent[]>([])
   // 鼠标悬停的日程
@@ -57,13 +61,18 @@ function App(): JSX.Element {
   const [settings, setSettings] = useState<Settings>({
     windowOpacity: 100,
     windowWidth: 1200,
-    windowHeight: 700,
+    windowHeight: 800,
     windowX: 100,
     windowY: 100,
     workdayColor: '#eff6ff',
     weekendColor: '#fef2f2',
-    otherMonthColor: '#f3f4f6'
+    otherMonthColor: '#f3f4f6',
+    calendarColor: '#1f2937',
+    calendarFontSize: 14,
+    calendarFontFamily: 'inherit'
   })
+  // 导出功能
+  const [isExportOpen, setIsExportOpen] = useState(false)
 
   // 加载节假日数据（应用启动时）
   useEffect(() => {
@@ -79,21 +88,6 @@ function App(): JSX.Element {
       try {
         const parsed = JSON.parse(savedEvents)
         setEvents(parsed)
-        console.log('已加载本地保存的日程信息:', parsed.length, '条')
-        
-        // ⭐ 调试：检查是否有 feishuEventId
-        const eventsWithFeishuId = parsed.filter((e: CalendarEvent) => e.feishuEventId)
-        console.log('⭐ 本地存储详情:', {
-          total: parsed.length,
-          withFeishuId: eventsWithFeishuId.length,
-          sampleEvents: parsed.slice(0, 3).map((e: CalendarEvent) => ({
-            id: e.id,
-            title: e.title,
-            date: e.date,
-            feishuEventId: e.feishuEventId,
-            hasFeishuId: !!e.feishuEventId
-          }))
-        })
       } catch (e) {
         console.error('加载日程信息失败:', e)
       }
@@ -113,7 +107,10 @@ function App(): JSX.Element {
           windowY: parsed.windowY ?? 100,
           workdayColor: parsed.workdayColor || '#eff6ff',
           weekendColor: parsed.weekendColor || '#fef2f2',
-          otherMonthColor: parsed.otherMonthColor || '#f3f4f6'
+          otherMonthColor: parsed.otherMonthColor || '#f3f4f6',
+          calendarColor: parsed.calendarColor || '#1f2937',
+          calendarFontSize: parsed.calendarFontSize ?? 14,
+          calendarFontFamily: parsed.calendarFontFamily || 'inherit'
         })
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -180,11 +177,62 @@ function App(): JSX.Element {
     // 透明度现在通过 CSS 控制，不需要调用 Electron API
   }
 
+  // 导出功能
+  const handleExport = useCallback(async (startDate: string, endDate: string) => {
+    // 1. 筛选日期范围内的日程
+    const filteredEvents = events.filter(event => {
+      const eventDate = event.date
+      return eventDate >= startDate && eventDate <= endDate
+    })
+
+    // 2. 构建导出数据（简化结构，适合大模型分析）
+    const exportData = {
+      exportInfo: {
+        exportDate: new Date().toISOString(),
+        dateRange: {
+          start: startDate,
+          end: endDate
+        },
+        totalEvents: filteredEvents.length
+      },
+      events: filteredEvents.map(event => ({
+        date: event.date,
+        time: event.time,
+        title: event.title,
+        location: event.location,
+        importance: event.importance,
+        description: event.description || ''
+      })),
+      statistics: {
+        byImportance: {
+          high: filteredEvents.filter(e => e.importance === 'high').length,
+          medium: filteredEvents.filter(e => e.importance === 'medium').length,
+          low: filteredEvents.filter(e => e.importance === 'low').length
+        },
+        byMonth: filteredEvents.reduce((acc, event) => {
+          const month = event.date.substring(0, 7) // "YYYY-MM"
+          acc[month] = (acc[month] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      }
+    }
+
+    // 3. 调用 IPC 保存文件
+    const defaultFileName = `calendar-export-${startDate}-${endDate}.json`
+    const result = await window.api.saveExportFile(exportData, defaultFileName)
+
+    if (result.success) {
+      alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程\n文件：${result.filePath}`)
+      setIsExportOpen(false)
+    } else if (!result.canceled) {
+      alert('导出失败：' + result.error)
+    }
+  }, [events])
+
   // 保存日程到本地存储
   const saveEventsToLocalStorage = (eventsToSave: CalendarEvent[]) => {
     try {
       localStorage.setItem('calendar-events', JSON.stringify(eventsToSave))
-      console.log('已保存日程信息到本地:', eventsToSave.length, '条')
     } catch (e) {
       console.error('保存日程信息失败:', e)
     }
@@ -234,7 +282,6 @@ function App(): JSX.Element {
       }
 
       if (result.success) {
-        console.log('飞书同步成功:', result.event.event_id)
         // 更新本地事件的飞书 ID（不阻塞保存）
         setEvents(prevEvents => {
           const updatedEvents = prevEvents.map(e => {
@@ -288,7 +335,6 @@ function App(): JSX.Element {
       if (savedEvents) {
         setEvents(JSON.parse(savedEvents))
       }
-      console.log('同步完成:', result)
     } catch (error: any) {
       setSyncStatus(prev => ({
         ...prev,
@@ -308,17 +354,44 @@ function App(): JSX.Element {
     return `${year}-${month}-${day}`
   }
 
-  const getCalendarDays = (year: number, month: number): CalendarDayInfo[] => {
-    const viewMonthStart = new Date(year, month, 1)
-    const viewMonthDayOfWeek = viewMonthStart.getDay()
-    const adjustedDayOfWeek = viewMonthDayOfWeek === 0 ? 6 : viewMonthDayOfWeek - 1
-    const viewMonthWeekStart = new Date(viewMonthStart)
-    viewMonthWeekStart.setDate(viewMonthStart.getDate() - adjustedDayOfWeek - 7)
+  // 月份切换处理函数
+  const handlePrevMonth = () => {
+    const newBaseDate = new Date(calendarBaseDate)
+    newBaseDate.setMonth(newBaseDate.getMonth() - 1)
+    setCalendarBaseDate(newBaseDate)
+  }
 
+  const handleNextMonth = () => {
+    const newBaseDate = new Date(calendarBaseDate)
+    newBaseDate.setMonth(newBaseDate.getMonth() + 1)
+    setCalendarBaseDate(newBaseDate)
+  }
+
+  const handleToday = () => {
+    setCalendarBaseDate(new Date())
+  }
+
+  const getCalendarDays = (year: number, month: number): CalendarDayInfo[] => {
+    // 使用 calendarBaseDate 计算日历显示范围
+    const baseDate = calendarBaseDate
+    
+    // 1. 计算 baseDate 所在的周的周一
+    const baseDateDayOfWeek = baseDate.getDay()
+    const adjustedDayOfWeek = baseDateDayOfWeek === 0 ? 6 : baseDateDayOfWeek - 1
+    
+    // 2. baseDate 所在周的周一
+    const thisWeekMonday = new Date(baseDate)
+    thisWeekMonday.setDate(baseDate.getDate() - adjustedDayOfWeek)
+    
+    // 3. 上周的周一（日历起始日期）
+    const calendarStartDate = new Date(thisWeekMonday)
+    calendarStartDate.setDate(thisWeekMonday.getDate() - 7)
+    
+    // 4. 生成 35 天（5 周）
     const days: CalendarDayInfo[] = []
     for (let i = 0; i < 35; i++) {
-      const currentDay = new Date(viewMonthWeekStart)
-      currentDay.setDate(viewMonthWeekStart.getDate() + i)
+      const currentDay = new Date(calendarStartDate)
+      currentDay.setDate(calendarStartDate.getDate() + i)
       const dayOfWeek = currentDay.getDay()
 
       // 修复时区问题：使用本地时间格式化，而不是 toISOString()
@@ -326,6 +399,9 @@ function App(): JSX.Element {
       const currentMonth = String(currentDay.getMonth() + 1).padStart(2, '0')
       const currentDayStr = String(currentDay.getDate()).padStart(2, '0')
       const dateStr = `${currentYear}-${currentMonth}-${currentDayStr}`
+      
+      // 获取农历信息
+      const lunarInfo = getLunarDateCached(currentDay)
 
       days.push({
         date: dateStr,
@@ -333,7 +409,8 @@ function App(): JSX.Element {
         isCurrentMonth: currentDay.getMonth() === month,
         isPrevMonth: currentDay.getMonth() < month && (month !== 0 || currentDay.getMonth() !== 11),
         isNextMonth: currentDay.getMonth() > month && (month !== 11 || currentDay.getMonth() !== 0),
-        isWeekend: dayOfWeek === 0 || dayOfWeek === 6
+        isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+        lunarStr: lunarInfo.lunarStr
       })
     }
 
@@ -371,13 +448,6 @@ function App(): JSX.Element {
     
     if (isEditMode) {
       // ⭐ 编辑模式：更新本地数据
-      console.log('✏️ Editing event:', {
-        id: eventData.id,
-        hasFeishuId: !!eventData.feishuEventId,
-        feishuId: eventData.feishuEventId,
-        title: eventData.title
-      })
-      
       const updated = events.map(event =>
         event.id === eventData.id ? eventData : event
       )
@@ -387,20 +457,18 @@ function App(): JSX.Element {
       // ⭐ 关键判断：根据 feishuEventId 决定创建还是更新
       if (eventData.feishuEventId) {
         // 已有飞书 ID → 更新飞书日程
-        console.log('🔄 Updating Feishu event:', eventData.feishuEventId)
         setTimeout(() => {
           syncManager.syncUpdateToFeishu(eventData)
             .then(success => {
-              console.log(success ? '✅ Feishu update successful' : '❌ Feishu update failed')
+              // 静默处理，不输出日志
             })
         }, 0)
       } else {
         // 无飞书 ID → 创建飞书日程
-        console.log('➕ Creating Feishu event (was local only)')
         setTimeout(() => {
           syncManager.syncCreateToFeishu(eventData)
             .then(success => {
-              console.log(success ? '✅ Feishu creation successful' : '❌ Feishu creation failed')
+              // 静默处理，不输出日志
             })
         }, 0)
       }
@@ -411,8 +479,6 @@ function App(): JSX.Element {
         id: Date.now().toString()
       }
       
-      console.log('🆕 Creating new event:', newEvent)
-      
       const updated = [...events, newEvent]
       setEvents(updated)
       saveEventsToLocalStorage(updated)
@@ -421,7 +487,7 @@ function App(): JSX.Element {
       setTimeout(() => {
         syncManager.syncCreateToFeishu(newEvent)
           .then(success => {
-            console.log(success ? '✅ Feishu creation successful' : '❌ Feishu creation failed')
+            // 静默处理，不输出日志
           })
       }, 0)
     }
@@ -437,11 +503,10 @@ function App(): JSX.Element {
     if (event) {
       // ⭐ 如果有飞书 ID，同步删除飞书日程
       if (event.feishuEventId) {
-        console.log('🗑️ Deleting Feishu event:', event.feishuEventId)
         setTimeout(() => {
           syncManager.syncDeleteFromFeishu(event)
             .then(success => {
-              console.log(success ? '✅ Feishu deletion successful' : '❌ Feishu deletion failed')
+              // 静默处理，不输出日志
             })
         }, 0)
       }
@@ -527,6 +592,13 @@ function App(): JSX.Element {
             ⚙
           </button>
           <button 
+            onClick={() => setIsExportOpen(true)}
+            className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-green-600"
+            title="导出日程"
+          >
+            📤
+          </button>
+          <button 
             onClick={handleMinimize}
             className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-gray-600"
             title="最小化"
@@ -539,19 +611,25 @@ function App(): JSX.Element {
       <div className="flex-1 flex flex-col p-3">
         <div className="flex items-center justify-between mb-2">
           <button
-            onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))}
+            onClick={handlePrevMonth}
             className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded"
           >
             ‹
           </button>
           <span className="text-lg font-bold">
-            {viewDate.getFullYear()}年 {viewDate.getMonth() + 1}月
+            {calendarBaseDate.getFullYear()}年 {calendarBaseDate.getMonth() + 1}月
           </span>
           <button
-            onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))}
+            onClick={handleNextMonth}
             className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded"
           >
             ›
+          </button>
+          <button
+            onClick={handleToday}
+            className="px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded ml-2"
+          >
+            今
           </button>
         </div>
 
@@ -563,7 +641,7 @@ function App(): JSX.Element {
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1 flex-1">
+        <div className="grid grid-cols-7 gap-1 flex-1 min-h-[500px] auto-rows-fr">
           {calendarDays.map((dayInfo, index) => {
             const dayEvents = getEventsForDay(dayInfo.date)
             const isToday = dayInfo.date === getTodayDateStr()
@@ -594,7 +672,9 @@ function App(): JSX.Element {
             return (
               <div
                 key={index}
-                className="border border-gray-200 rounded p-1 flex flex-col relative"
+                className={`border rounded p-0.5 flex flex-col relative ${
+                  isToday ? 'border-2 border-red-500' : 'border-gray-200'
+                }`}
                 style={{ backgroundColor }}
                 onDoubleClick={() => handleDayDoubleClick(dayInfo.date)}
                 onContextMenu={(e) => {
@@ -608,12 +688,22 @@ function App(): JSX.Element {
                   }
                 }}
               >
-                <div className="relative mb-1 flex items-center justify-center">
-                  <div className={`text-xs ${
-                    isToday ? 'bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center' : 
-                    dayInfo.isWeekend ? 'text-red-500' : 'text-gray-700'
-                  }`}>
-                    {dayInfo.day}
+                <div className="relative mb-0.5 flex items-center justify-center shrink-0">
+                  <div 
+                    className="flex items-center"
+                    style={{
+                      color: settings.calendarColor,
+                      fontSize: `${settings.calendarFontSize}px`,
+                      fontFamily: settings.calendarFontFamily
+                    }}
+                  >
+                    <span>{dayInfo.day}</span>
+                    {/* 农历显示 */}
+                    {dayInfo.lunarStr && (
+                      <span className="ml-1">
+                        {dayInfo.lunarStr}
+                      </span>
+                    )}
                   </div>
                   {/* 节假日标记 */}
                   {dayMark && (
@@ -623,7 +713,7 @@ function App(): JSX.Element {
                     </span>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-0.5">
+                <div className="flex-1 overflow-y-auto space-y-0.5 min-h-[120px]">
                   {dayEvents.map(event => (
                     <div
                       key={event.id}
@@ -633,12 +723,25 @@ function App(): JSX.Element {
                         e.stopPropagation()
                         setContextMenu({ x: e.clientX, y: e.clientY, event })
                       }}
-                      className={`text-xs p-0.5 rounded cursor-pointer truncate ${
+                      onMouseEnter={(e) => {
+                        if (event.description) {
+                          setHoveredEvent(event)
+                          setMousePosition({ x: e.clientX, y: e.clientY })
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredEvent(null)
+                      }}
+                      onMouseMove={(e) => {
+                        if (hoveredEvent) {
+                          setMousePosition({ x: e.clientX, y: e.clientY })
+                        }
+                      }}
+                      className={`text-xs p-0.5 rounded cursor-pointer truncate leading-tight ${
                         event.importance === 'high' ? 'bg-red-200 text-red-800' :
                         event.importance === 'medium' ? 'bg-orange-200 text-orange-800' :
                         'bg-gray-200 text-gray-800'
                       }`}
-                      title={`${event.time} ${event.title}`}
                     >
                       {event.time} {event.title}
                     </div>
@@ -656,6 +759,13 @@ function App(): JSX.Element {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onSaveSettings={handleSaveSettings}
+      />
+
+      <ExportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        onExport={handleExport}
+        totalEvents={events.length}
       />
 
       <EventFormModal
@@ -684,6 +794,24 @@ function App(): JSX.Element {
           >
             🗑️ 删除日程
           </button>
+        </div>
+      )}
+      
+      {/* 日程备注悬浮框 */}
+      {hoveredEvent && (
+        <div
+          className="fixed bg-white/95 backdrop-blur-sm border border-gray-300 rounded-lg shadow-2xl p-3 z-50 max-w-xs"
+          style={{
+            left: Math.min(mousePosition.x + 15, window.innerWidth - 320),
+            top: Math.min(mousePosition.y + 15, window.innerHeight - 200)
+          }}
+        >
+          <div className="text-sm font-medium text-gray-800 mb-2 pb-2 border-b border-gray-200">
+            📝 备注信息
+          </div>
+          <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {hoveredEvent.description}
+          </div>
         </div>
       )}
       

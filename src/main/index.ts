@@ -639,6 +639,32 @@ app.whenReady().then(() => {
     }
   })
 
+  // 导出文件保存
+  ipcMain.handle('export:saveFile', async (_, data: any, defaultPath: string) => {
+    const { dialog } = require('electron')
+    const { writeFileSync } = require('fs')
+    
+    const result = await dialog.showSaveDialog({
+      title: '导出日程数据',
+      defaultPath: defaultPath || 'calendar-export.json',
+      filters: [
+        { name: 'JSON 文件', extensions: ['json'] }
+      ]
+    })
+    
+    if (!result.canceled && result.filePath) {
+      try {
+        // 美化 JSON 格式，便于阅读
+        writeFileSync(result.filePath, JSON.stringify(data, null, 2), 'utf-8')
+        return { success: true, filePath: result.filePath }
+      } catch (error: any) {
+        return { success: false, error: error.message }
+      }
+    }
+    
+    return { success: false, canceled: true }
+  })
+
   createWindow()
   createTray()
 
