@@ -624,7 +624,7 @@ function App(): JSX.Element {
             className={`w-6 h-6 flex items-center justify-center rounded ${
               showTestPage ? 'bg-purple-200 text-purple-700' : 'hover:bg-purple-100 text-purple-600'
             }`}
-            title="飞书日程测试页面"
+            title="飞书日历管理中心"
           >
             🧪
           </button>

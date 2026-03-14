@@ -410,28 +410,19 @@ app.whenReady().then(() => {
     }
   })
 
-  // 使用 user_access_token 获取日历列表（推荐方式）
+  // 使用 tenant_access_token 获取日历列表（推荐方式）
   ipcMain.handle('feishu:getCalendarList', async () => {
     try {
-      const userAccessToken = await feishuAuth.getAccessToken()
-      const axios = require('axios')
-      
-      const response = await axios.get('https://open.feishu.cn/open-apis/calendar/v4/calendars', {
-        headers: {
-          'Authorization': `Bearer ${userAccessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: FEISHU_CONFIG.timeout
-      })
-      
-      if (response.data.code === 0) {
-        return { success: true, calendars: response.data.data.items || [] }
-      } else {
-        return { success: false, error: response.data.msg || '获取日历列表失败' }
-      }
+      // 直接使用 feishuCalendarAPI 的方法（已使用 tenant_access_token）
+      const calendars = await feishuCalendarAPI.getCalendarList()
+      return { success: true, calendars }
     } catch (error: any) {
       console.error('获取日历列表失败:', error)
-      return { success: false, error: error.message || '获取日历列表失败' }
+      return { 
+        success: false, 
+        error: error.message || '获取日历列表失败',
+        hint: '请检查飞书应用配置和权限设置'
+      }
     }
   })
 
