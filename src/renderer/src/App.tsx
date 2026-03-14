@@ -211,9 +211,9 @@ function App(): JSX.Element {
     })
 
     // 2. 导入工具函数
-    const { extractAttachments, countAttachmentTypes } = await import('./utils/exportUtils')
+    const { extractAttachments } = await import('./utils/exportUtils')
 
-    // 3. 构建导出数据（大模型友好格式）
+    // 3. 构建导出数据（精简格式）
     const exportData = {
       exportInfo: {
         exportedAt: new Date().toISOString(),
@@ -223,7 +223,7 @@ function App(): JSX.Element {
         },
         totalEvents: filteredEvents.length,
         withAttachments: filteredEvents.filter(e => e.description && (e.description.includes('\\') || e.description.includes('http'))).length,
-        formatVersion: '2.0'
+        formatVersion: '2.1'
       },
       events: filteredEvents.map(event => {
         // 解析描述，分离文字和附件
@@ -234,9 +234,7 @@ function App(): JSX.Element {
           dateTime: {
             date: event.date,
             startTime: event.time,
-            endTime: event.endTime || '',
-            dayOfWeek: getDayOfWeek(event.date),
-            lunarDate: getLunarDate(event.date)
+            endTime: event.endTime || ''
           },
           basicInfo: {
             title: event.title,
@@ -250,30 +248,10 @@ function App(): JSX.Element {
           },
           syncInfo: {
             source: event.feishuEventId ? 'feishu' : 'local',
-            feishuEventId: event.feishuEventId,
-            lastSyncTime: event.lastSyncTime
+            feishuEventId: event.feishuEventId
           }
         }
-      }),
-      statistics: {
-        byImportance: {
-          high: filteredEvents.filter(e => e.importance === 'high').length,
-          medium: filteredEvents.filter(e => e.importance === 'medium').length,
-          low: filteredEvents.filter(e => e.importance === 'low').length
-        },
-        byMonth: filteredEvents.reduce((acc, event) => {
-          const month = event.date.substring(0, 7) // "YYYY-MM"
-          acc[month] = (acc[month] || 0) + 1
-          return acc
-        }, {} as Record<string, number>),
-        attachmentTypes: (() => {
-          const allAttachments = filteredEvents.flatMap(event => {
-            const { attachments } = extractAttachments(event.description || '')
-            return attachments
-          })
-          return countAttachmentTypes(allAttachments)
-        })()
-      }
+      })
     }
 
     // 4. 调用 IPC 保存文件

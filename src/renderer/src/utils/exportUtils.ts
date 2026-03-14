@@ -56,34 +56,44 @@ export function getAttachmentType(pathOrUrl: string): AttachmentType {
  */
 export function extractAttachments(description: string): ParseResult {
   const attachments: Attachment[] = []
+  const seenPaths = new Set<string>()  // 用于去重
   
   let text = description
   
-  // 正则表达式匹配各种路径（按优先级排序）
+  // 正则表达式匹配各种路径（优化顺序）
   const patterns = [
     // URL 链接
     /(https?:\/\/[^\s<>"{}|\\^\`\[\]]+)/g,
-    // Windows 路径（反斜杠）
+    // Windows 路径（反斜杠，优先匹配完整路径）
     /([A-Za-z]:\\[^\s<>"|?*]+)/g,
     // Windows 路径（正斜杠）
     /([A-Za-z]:\/[^\s<>"|?*]+)/g,
     // UNC 路径
     /(\\\\[^\s<>"|?*]+)/g,
-    // 相对路径
-    /(\.?[\/\\][^\s<>"|?*]+\.[^\s<>"|?*]+)/g
+    // 相对路径（最后匹配，避免与绝对路径冲突）
+    /(\.?[\/\\](?:[^\s<>"|?*]+[\/\\])+[^\s<>"|?*]+\.[^\s<>"|?*]+)/g
   ]
   
   for (const pattern of patterns) {
     const matches = description.match(pattern) || []
     for (const match of matches) {
-      // 提取文件名
-      const name = match.split(/[\/\\]/).pop() || ''
+      // 标准化路径（用于去重）
+      const normalizedPath = normalizePath(match)
+      
+      // 跳过已处理的路径
+      if (seenPaths.has(normalizedPath)) {
+        continue
+      }
+      seenPaths.add(normalizedPath)
+      
+      // 正确提取文件名
+      const name = extractFileName(match)
       
       // 判断类型
       const type = getAttachmentType(match)
       
       attachments.push({
-        path: match,
+        path: match,  // 保留原始路径
         name,
         type
       })
@@ -97,6 +107,30 @@ export function extractAttachments(description: string): ParseResult {
   text = text.replace(/  +/g, ' ').trim()
   
   return { text, attachments }
+}
+
+/**
+ * 标准化路径（用于去重）
+ * @param path 原始路径
+ * @returns 标准化后的路径
+ */
+function normalizePath(path: string): string {
+  // 统一斜杠方向并转为小写
+  return path.replace(/\\/g, '/').toLowerCase()
+}
+
+/**
+ * 正确提取文件名
+ * @param path 文件路径或 URL
+ * @returns 文件名
+ */
+function extractFileName(path: string): string {
+  // 移除协议前缀
+  let cleanPath = path.replace(/^https?:\/\//, '')
+  
+  // 提取最后一部分
+  const parts = cleanPath.split(/[\/\\]/)
+  return parts[parts.length - 1] || cleanPath
 }
 
 /**

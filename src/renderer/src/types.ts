@@ -97,8 +97,6 @@ export interface ExportEvent {
     date: string
     startTime: string
     endTime: string
-    dayOfWeek: string
-    lunarDate?: string
   }
   basicInfo: {
     title: string
@@ -113,7 +111,6 @@ export interface ExportEvent {
   syncInfo: {
     source: 'local' | 'feishu'
     feishuEventId?: string
-    lastSyncTime?: number
   }
 }
 
