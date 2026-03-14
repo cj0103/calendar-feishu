@@ -31,7 +31,13 @@ contextBridge.exposeInMainWorld('api', {
     getCalendarList: () => ipcRenderer.invoke('feishu:getCalendarList'),
     getCalendarListWithToken: (tenantAccessToken: string) => 
       ipcRenderer.invoke('feishu:getCalendarListWithToken', tenantAccessToken),
-    createCalendar: (calendarData: { summary: string; description?: string; color?: string }) => 
+    createCalendar: (calendarData: { 
+      summary: string
+      description?: string
+      permissions?: 'private' | 'show_only_free_busy' | 'public'
+      color?: number
+      summaryAlias?: string
+    }) => 
       ipcRenderer.invoke('feishu:createCalendar', calendarData),
     getEvents: (calendarId: string, startTime: number, endTime: number) => 
       ipcRenderer.invoke('feishu:getEvents', calendarId, startTime, endTime),

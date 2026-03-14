@@ -103,6 +103,45 @@ class FeishuCalendarAPI {
   }
 
   /**
+   * 创建共享日历
+   * @param summary 日历标题
+   * @param description 日历描述
+   * @param permissions 日历公开范围
+   * @param color 日历颜色
+   * @param summaryAlias 日历备注名
+   */
+  async createCalendar(
+    summary: string,
+    description?: string,
+    permissions?: 'private' | 'show_only_free_busy' | 'public',
+    color?: number,
+    summaryAlias?: string
+  ): Promise<any> {
+    try {
+      const client = await this.getHttpClient()
+      const response = await client.post('/calendar/v4/calendars', {
+        summary,
+        description: description || '',
+        permissions: permissions || 'private',
+        color: color || -1,
+        summary_alias: summaryAlias || ''
+      })
+      
+      if (response.data.code === 0) {
+        return response.data.data.calendar
+      } else {
+        throw new Error(response.data.msg || '创建日历失败')
+      }
+    } catch (error: any) {
+      console.error('创建日历失败:', error)
+      if (error.response) {
+        console.error('❌ HTTP 错误响应:', error.response.data)
+      }
+      throw new Error(error.message || '创建日历失败')
+    }
+  }
+
+  /**
    * 获取指定日历的事件列表
    * @param calendarId 日历 ID
    * @param startTime 开始时间（时间戳，秒）

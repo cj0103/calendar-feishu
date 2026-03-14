@@ -385,47 +385,25 @@ app.whenReady().then(() => {
     }
   })
 
-  // 创建日历（应用身份）
+  // 创建日历（使用 user_access_token）
   ipcMain.handle('feishu:createCalendar', async (_, calendarData: {
     summary: string
     description?: string
-    color?: string
+    permissions?: 'private' | 'show_only_free_busy' | 'public'
+    color?: number
+    summaryAlias?: string
   }) => {
     try {
-      const tenantAccessToken = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app_id: FEISHU_CONFIG.appId,
-          app_secret: FEISHU_CONFIG.appSecret
-        })
-      }).then(res => res.json()).then(data => data.tenant_access_token)
-
-      const axios = require('axios')
-      
-      const response = await axios.post(
-        'https://open.feishu.cn/open-apis/calendar/v4/calendars',
-        {
-          summary: calendarData.summary,
-          description: calendarData.description || '',
-          color: calendarData.color || 'blue'
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${tenantAccessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: FEISHU_CONFIG.timeout
-        }
+      const calendar = await feishuCalendarAPI.createCalendar(
+        calendarData.summary,
+        calendarData.description,
+        calendarData.permissions,
+        calendarData.color,
+        calendarData.summaryAlias
       )
       
-      if (response.data.code === 0) {
-        console.log('创建日历成功:', response.data.data)
-        return { success: true, calendar: response.data.data }
-      } else {
-        console.error('创建日历失败:', response.data.msg)
-        return { success: false, error: response.data.msg || '创建日历失败' }
-      }
+      console.log('创建日历成功:', calendar)
+      return { success: true, calendar }
     } catch (error: any) {
       console.error('创建日历错误:', error)
       return { success: false, error: error.message || '创建日历失败' }

@@ -14,6 +14,22 @@ export interface CalendarEvent {
   lastSyncTime?: number       // 最后同步时间戳（用于冲突判断）
 }
 
+/**
+ * 飞书日历信息接口
+ */
+export interface FeishuCalendar {
+  calendar_id: string
+  summary: string
+  description?: string
+  permissions?: 'private' | 'show_only_free_busy' | 'public'
+  color?: number
+  type?: string
+  is_deleted?: boolean
+  is_third_party?: boolean
+  role?: 'owner' | 'writer' | 'reader'
+  summary_alias?: string
+}
+
 export interface CalendarDay {
   date: string
   day: number

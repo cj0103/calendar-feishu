@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { FeishuCalendar } from './types'
 
 interface FeishuEvent {
   event_id: string
@@ -21,11 +22,31 @@ interface FeishuEvent {
   status: string
 }
 
+interface CreateCalendarFormData {
+  summary: string
+  description: string
+  permissions: 'private' | 'show_only_free_busy' | 'public'
+  color: number
+  summaryAlias: string
+}
+
 export function FeishuTestPage(): JSX.Element {
   const [events, setEvents] = useState<FeishuEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [calendarId, setCalendarId] = useState('feishu.cn_ZNZmRH6zzbrOayVBy7Y3Ye@group.calendar.feishu.cn')
+  
+  // 日历管理相关状态
+  const [calendars, setCalendars] = useState<FeishuCalendar[]>([])
+  const [isLoadingCalendars, setIsLoadingCalendars] = useState(false)
+  const [isCreatingCalendar, setIsCreatingCalendar] = useState(false)
+  const [createFormData, setCreateFormData] = useState<CreateCalendarFormData>({
+    summary: '',
+    description: '',
+    permissions: 'private',
+    color: -1,
+    summaryAlias: ''
+  })
   
   // ⭐ 时间段选择（默认：过去 3 个月 + 未来 2 周）
   const getDefaultDateRange = () => {
@@ -41,6 +62,76 @@ export function FeishuTestPage(): JSX.Element {
   
   const [startDate, setStartDate] = useState(getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState(getDefaultDateRange().endDate)
+
+  // 加载日历列表
+  const loadCalendars = async () => {
+    setIsLoadingCalendars(true)
+    setError(null)
+    try {
+      const result = await window.api.feishu.getCalendarList()
+      if (result.success) {
+        setCalendars(result.calendars || [])
+        console.log('✅ 加载日历列表成功:', result.calendars?.length)
+      } else {
+        setError(result.error || '加载日历列表失败')
+      }
+    } catch (err: any) {
+      console.error('❌ 加载日历列表失败:', err)
+      setError(err.message || '加载日历列表失败')
+    } finally {
+      setIsLoadingCalendars(false)
+    }
+  }
+
+  // 创建日历
+  const handleCreateCalendar = async () => {
+    if (!createFormData.summary.trim()) {
+      alert('请输入日历名称')
+      return
+    }
+
+    setIsCreatingCalendar(true)
+    try {
+      const result = await window.api.feishu.createCalendar(createFormData)
+      if (result.success) {
+        alert(`日历创建成功！\n名称：${result.calendar.summary}\nID: ${result.calendar.calendar_id}`)
+        // 清空表单
+        setCreateFormData({
+          summary: '',
+          description: '',
+          permissions: 'private',
+          color: -1,
+          summaryAlias: ''
+        })
+        // 刷新日历列表
+        await loadCalendars()
+      } else {
+        alert('创建失败：' + result.error)
+      }
+    } catch (err: any) {
+      console.error('❌ 创建日历失败:', err)
+      alert('创建失败：' + err.message)
+    } finally {
+      setIsCreatingCalendar(false)
+    }
+  }
+
+  // 复制日历 ID
+  const copyCalendarId = async (calendarId: string) => {
+    try {
+      await navigator.clipboard.writeText(calendarId)
+      alert('日历 ID 已复制到剪贴板')
+    } catch (err) {
+      console.error('复制失败:', err)
+      alert('复制失败，请手动复制')
+    }
+  }
+
+  // 选择日历
+  const selectCalendar = (selectedCalendarId: string) => {
+    setCalendarId(selectedCalendarId)
+    alert(`已选择日历：${selectedCalendarId}`)
+  }
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -149,6 +240,11 @@ export function FeishuTestPage(): JSX.Element {
     }
   }
   
+  // ⭐ 页面加载时自动加载日历列表
+  useEffect(() => {
+    loadCalendars()
+  }, [])
+
   // ⭐ 重置为默认时间范围
   const resetDateRange = () => {
     const range = getDefaultDateRange()
@@ -170,11 +266,145 @@ export function FeishuTestPage(): JSX.Element {
   }
 
   return (
-    <div className="p-4" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 className="text-2xl font-bold mb-4">飞书日程测试页面</h1>
+    <div className="p-4" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <h1 className="text-2xl font-bold mb-4">飞书日历管理中心</h1>
       
-      {/* 控制区域 */}
+      {/* 日历管理区域 */}
+      <div className="mb-6 grid grid-cols-2 gap-4">
+        {/* 日历列表 */}
+        <div className="p-4 bg-blue-50 rounded border border-blue-200">
+          <h2 className="text-lg font-semibold mb-3">📅 我的日历</h2>
+          
+          {isLoadingCalendars ? (
+            <div className="text-center py-4 text-gray-500">加载中...</div>
+          ) : calendars.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">
+              暂无日历，请创建新日历
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {calendars.map((calendar) => (
+                <div
+                  key={calendar.calendar_id}
+                  className={`p-3 rounded border cursor-pointer transition-all ${
+                    calendar.calendar_id === calendarId
+                      ? 'bg-blue-100 border-blue-400 shadow-sm'
+                      : 'bg-white border-gray-200 hover:border-blue-300'
+                  }`}
+                  onClick={() => selectCalendar(calendar.calendar_id)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">
+                        {calendar.summary || '(无标题)'}
+                        {calendar.calendar_id === calendarId && (
+                          <span className="ml-2 text-xs text-blue-600">✓ 当前使用</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {calendar.calendar_id}
+                      </div>
+                      {calendar.role && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          权限：{calendar.role === 'owner' ? '所有者' : calendar.role === 'writer' ? '编辑者' : '查看者'}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        copyCalendarId(calendar.calendar_id)
+                      }}
+                      className="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                      title="复制日历 ID"
+                    >
+                      📋 复制
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={loadCalendars}
+              disabled={isLoadingCalendars}
+              className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+            >
+              🔄 刷新列表
+            </button>
+          </div>
+        </div>
+        
+        {/* 创建新日历 */}
+        <div className="p-4 bg-green-50 rounded border border-green-200">
+          <h2 className="text-lg font-semibold mb-3">➕ 创建新日历</h2>
+          
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">日历名称 *</label>
+              <input
+                type="text"
+                value={createFormData.summary}
+                onChange={(e) => setCreateFormData({ ...createFormData, summary: e.target.value })}
+                placeholder="例如：工作日程、个人计划"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-300"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">日历描述</label>
+              <input
+                type="text"
+                value={createFormData.description}
+                onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
+                placeholder="可选"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-300"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">公开范围</label>
+              <select
+                value={createFormData.permissions}
+                onChange={(e) => setCreateFormData({ ...createFormData, permissions: e.target.value as any })}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-300"
+              >
+                <option value="private">私密（仅自己可见）</option>
+                <option value="show_only_free_busy">仅展示忙闲信息</option>
+                <option value="public">他人可查看日程详情</option>
+              </select>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={handleCreateCalendar}
+                disabled={isCreatingCalendar || !createFormData.summary.trim()}
+                className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+              >
+                {isCreatingCalendar ? '创建中...' : '✅ 创建日历'}
+              </button>
+            </div>
+            
+            <div className="text-xs text-gray-500">
+              💡 提示：创建成功后会自动刷新日历列表，并提供 calendarId 用于配置
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* 日程获取与同步控制区域 */}
       <div className="mb-4 p-4 bg-gray-100 rounded">
+        <div className="mb-2">
+          <label className="block text-sm font-medium mb-1">日历 ID:</label>
+          <input
+            type="text"
+            value={calendarId}
+            onChange={(e) => setCalendarId(e.target.value)}
+            className="w-full p-2 border rounded"
+          />
+        </div>
         <div className="mb-2">
           <label className="block text-sm font-medium mb-1">日历 ID:</label>
           <input
