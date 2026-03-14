@@ -118,7 +118,7 @@ class FeishuAuth {
    */
   async getTenantAccessToken(): Promise<{ tenant_access_token: string; expire: number }> {
     try {
-      console.log('🔑 请求 tenant_access_token，使用 App ID:', FEISHU_CONFIG.appId)
+      console.log('[Auth] 请求 tenant_access_token, App ID:', FEISHU_CONFIG.appId)
       const response = await axios.post(
         `${FEISHU_CONFIG.apiBaseUrl}/auth/v3/tenant_access_token/internal`,
         {
@@ -132,24 +132,22 @@ class FeishuAuth {
         }
       )
 
-      console.log('📥 tenant_access_token 响应状态码:', response.data.code)
+      console.log('[Auth] 响应状态码:', response.data.code)
       
       if (response.data.code === 0) {
-        console.log('✅ 成功获取 tenant_access_token')
+        console.log('[Auth] 成功获取 tenant_access_token')
         return {
           tenant_access_token: response.data.tenant_access_token,
           expire: response.data.expire
         }
       } else {
-        console.error('❌ 获取 tenant_access_token 失败:', response.data.msg)
-        console.error('错误详情:', response.data)
-        throw new Error(`获取授权失败：${response.data.msg || '未知错误'}\n\n请检查：\n1. App ID 和 App Secret 是否正确\n2. 应用是否已发布\n3. 是否添加了"获取 tenant_access_token"权限`)
+        console.error('[Auth Error]', response.data.msg)
+        throw new Error(`获取授权失败：${response.data.msg}`)
       }
     } catch (error: any) {
-      console.error('❌ 获取 tenant_access_token 异常:', error)
+      console.error('[Auth Error]', error.message)
       if (error.response) {
-        console.error('HTTP 错误响应:', error.response.data)
-        console.error('HTTP 状态码:', error.response.status)
+        console.error('[Auth Error Response]', error.response.data)
       }
       throw new Error(error.message || '获取 tenant_access_token 失败')
     }

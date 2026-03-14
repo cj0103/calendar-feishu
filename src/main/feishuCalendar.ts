@@ -68,15 +68,14 @@ class FeishuCalendarAPI {
    */
   private async getHttpClient() {
     try {
-      // 直接使用 tenant_access_token
-      console.log('🔑 正在获取 tenant_access_token...')
+      console.log('[Token] 正在获取 tenant_access_token...')
       const tokenResult = await feishuAuth.getTenantAccessToken()
       if (!tokenResult || !tokenResult.tenant_access_token) {
-        console.error('❌ 未获取到 tenant_access_token')
+        console.error('[Token] 未获取到 tenant_access_token')
         throw new Error('未获取到 tenant_access_token，请检查飞书应用配置')
       }
       
-      console.log('✅ 成功获取 tenant_access_token')
+      console.log('[Token] 成功获取 tenant_access_token')
       return axios.create({
         baseURL: this.baseUrl,
         timeout: FEISHU_CONFIG.timeout,
@@ -86,13 +85,8 @@ class FeishuCalendarAPI {
         }
       })
     } catch (error: any) {
-      console.error('❌ 获取 HTTP 客户端失败:', error)
-      console.error('错误详情:', {
-        message: error.message,
-        response: error.response?.data,
-        appId: FEISHU_CONFIG.appId
-      })
-      throw new Error(`获取授权失败：${error.message}\n\n请检查：\n1. App ID: ${FEISHU_CONFIG.appId}\n2. App Secret 配置是否正确\n3. 应用是否已发布\n4. 网络连接是否正常`)
+      console.error('[HTTP Client Error]', error.message)
+      throw new Error(`获取授权失败：${error.message}`)
     }
   }
 
@@ -102,15 +96,23 @@ class FeishuCalendarAPI {
   async getCalendarList(): Promise<any[]> {
     try {
       const client = await this.getHttpClient()
+      console.log('[Calendar API] 请求获取日历列表...')
       const response = await client.get('/calendar/v4/calendars')
       
       if (response.data.code === 0) {
-        return response.data.data.items || []
+        // 飞书 API 返回的是 calendar_list 而不是 items
+        const calendars = response.data.data.calendar_list || response.data.data.items || []
+        console.log(`[Calendar API] 成功获取 ${calendars.length} 个日历`)
+        calendars.forEach((cal: any, i: number) => {
+          console.log(`  [${i+1}] ${cal.summary} (${cal.calendar_id})`)
+        })
+        return calendars
       } else {
+        console.error('[Calendar API Error]', response.data.msg)
         throw new Error(response.data.msg || '获取日历列表失败')
       }
     } catch (error: any) {
-      console.error('获取日历列表失败:', error)
+      console.error('[Calendar API Error]', error.message)
       throw new Error(error.message || '获取日历列表失败')
     }
   }
