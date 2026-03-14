@@ -139,27 +139,22 @@ export function FeishuTestPage(): JSX.Element {
 
   // 删除日历
   const deleteCalendar = async (calendarId: string, calendarName: string) => {
-    // 防误删确认：需要输入日历名称
-    const userInput = prompt(
-      `确定要删除日历 "${calendarName}" 吗？\n\n此操作不可恢复！\n请输入日历名称 "${calendarName}" 以确认删除：`
+    // 第一次确认
+    const firstConfirm = confirm(
+      `确定要删除日历 "${calendarName}" 吗？\n\n此操作不可恢复，该日历下的所有日程也将被删除！`
     )
     
-    if (!userInput) {
+    if (!firstConfirm) {
       console.log('已取消删除操作')
       return
     }
     
-    if (userInput !== calendarName && userInput !== calendarName.trim()) {
-      alert('输入的名称不匹配，已取消删除操作')
-      return
-    }
-    
-    // 二次确认
-    const finalConfirm = confirm(
-      `⚠️ 警告：即将永久删除日历 "${calendarName}"\n\n该日历下的所有日程也将被删除！\n\n确定要继续吗？`
+    // 第二次确认：再次确认
+    const secondConfirm = confirm(
+      `⚠️ 再次确认\n\n即将永久删除日历 "${calendarName}"\n\n请确保这是您要删除的日历！\n\n确定要继续吗？`
     )
     
-    if (!finalConfirm) {
+    if (!secondConfirm) {
       console.log('已取消删除操作')
       return
     }
@@ -170,10 +165,6 @@ export function FeishuTestPage(): JSX.Element {
         alert(`日历 "${calendarName}" 已成功删除`)
         // 刷新日历列表
         await loadCalendars()
-        // 如果删除的是当前使用的日历，清空 calendarId
-        if (calendarId === calendarId) {
-          setCalendarId('')
-        }
       } else {
         alert('删除失败：' + result.error)
       }
