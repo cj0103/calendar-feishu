@@ -115,8 +115,19 @@ export function extractAttachments(description: string): ParseResult {
  * @returns 标准化后的路径
  */
 function normalizePath(path: string): string {
-  // 统一斜杠方向并转为小写
-  return path.replace(/\\/g, '/').toLowerCase()
+  // 1. 移除盘符（C:、D: 等）
+  let normalized = path.replace(/^[A-Za-z]:/, '')
+  
+  // 2. 统一斜杠方向
+  normalized = normalized.replace(/\\/g, '/')
+  
+  // 3. 移除开头的斜杠（/Users -> Users）
+  normalized = normalized.replace(/^\/+/, '')
+  
+  // 4. 转为小写
+  normalized = normalized.toLowerCase()
+  
+  return normalized
 }
 
 /**
@@ -125,12 +136,14 @@ function normalizePath(path: string): string {
  * @returns 文件名
  */
 function extractFileName(path: string): string {
-  // 移除协议前缀
-  let cleanPath = path.replace(/^https?:\/\//, '')
+  // 1. 标准化路径（统一斜杠）
+  const normalized = path.replace(/\\/g, '/')
   
-  // 提取最后一部分
-  const parts = cleanPath.split(/[\/\\]/)
-  return parts[parts.length - 1] || cleanPath
+  // 2. 分割路径
+  const parts = normalized.split('/')
+  
+  // 3. 取最后一部分
+  return parts[parts.length - 1] || normalized
 }
 
 /**
