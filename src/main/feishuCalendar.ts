@@ -157,6 +157,28 @@ class FeishuCalendarAPI {
   }
 
   /**
+   * 删除日历
+   * @param calendarId 日历 ID
+   */
+  async deleteCalendar(calendarId: string): Promise<void> {
+    try {
+      console.log('[Calendar API] 请求删除日历:', calendarId)
+      const client = await this.getHttpClient()
+      const response = await client.delete(`/calendar/v4/calendars/${calendarId}`)
+      
+      if (response.data.code === 0) {
+        console.log('[Calendar API] 成功删除日历:', calendarId)
+      } else {
+        console.error('[Calendar API Error]', response.data.msg)
+        throw new Error(response.data.msg || '删除日历失败')
+      }
+    } catch (error: any) {
+      console.error('[Calendar API Error]', error.message)
+      throw new Error(error.message || '删除日历失败')
+    }
+  }
+
+  /**
    * 获取指定日历的事件列表
    * @param calendarId 日历 ID
    * @param startTime 开始时间（时间戳，秒）

@@ -433,6 +433,20 @@ app.whenReady().then(() => {
     }
   })
 
+  // 删除日历
+  ipcMain.handle('feishu:deleteCalendar', async (_, calendarId: string) => {
+    try {
+      await feishuCalendarAPI.deleteCalendar(calendarId)
+      return { success: true }
+    } catch (error: any) {
+      console.error('[Delete Calendar Error]', error.message)
+      return { 
+        success: false, 
+        error: error.message || '删除日历失败'
+      }
+    }
+  })
+
   // 获取日程列表
   ipcMain.handle('feishu:getEvents', async (_, calendarId: string, startTime: number, endTime: number) => {
     try {

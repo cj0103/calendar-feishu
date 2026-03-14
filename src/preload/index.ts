@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('api', {
       summaryAlias?: string
     }) => 
       ipcRenderer.invoke('feishu:createCalendar', calendarData),
+    deleteCalendar: (calendarId: string) => 
+      ipcRenderer.invoke('feishu:deleteCalendar', calendarId),
     getEvents: (calendarId: string, startTime: number, endTime: number) => 
       ipcRenderer.invoke('feishu:getEvents', calendarId, startTime, endTime),
     getEventsWithSyncToken: (calendarId: string, syncToken: string) => 

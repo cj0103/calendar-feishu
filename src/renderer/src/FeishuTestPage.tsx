@@ -134,7 +134,53 @@ export function FeishuTestPage(): JSX.Element {
   // 选择日历
   const selectCalendar = (selectedCalendarId: string) => {
     setCalendarId(selectedCalendarId)
-    alert(`已选择日历：${selectedCalendarId}`)
+    console.log(`已选择日历：${selectedCalendarId}`)
+  }
+
+  // 删除日历
+  const deleteCalendar = async (calendarId: string, calendarName: string) => {
+    // 防误删确认：需要输入日历名称
+    const userInput = prompt(
+      `确定要删除日历 "${calendarName}" 吗？\n\n此操作不可恢复！\n请输入日历名称 "${calendarName}" 以确认删除：`
+    )
+    
+    if (!userInput) {
+      console.log('已取消删除操作')
+      return
+    }
+    
+    if (userInput !== calendarName && userInput !== calendarName.trim()) {
+      alert('输入的名称不匹配，已取消删除操作')
+      return
+    }
+    
+    // 二次确认
+    const finalConfirm = confirm(
+      `⚠️ 警告：即将永久删除日历 "${calendarName}"\n\n该日历下的所有日程也将被删除！\n\n确定要继续吗？`
+    )
+    
+    if (!finalConfirm) {
+      console.log('已取消删除操作')
+      return
+    }
+    
+    try {
+      const result = await window.api.feishu.deleteCalendar(calendarId)
+      if (result.success) {
+        alert(`日历 "${calendarName}" 已成功删除`)
+        // 刷新日历列表
+        await loadCalendars()
+        // 如果删除的是当前使用的日历，清空 calendarId
+        if (calendarId === calendarId) {
+          setCalendarId('')
+        }
+      } else {
+        alert('删除失败：' + result.error)
+      }
+    } catch (err: any) {
+      console.error('删除日历失败:', err)
+      alert('删除失败：' + err.message)
+    }
   }
 
   const fetchEvents = async () => {
@@ -314,16 +360,28 @@ export function FeishuTestPage(): JSX.Element {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        copyCalendarId(calendar.calendar_id)
-                      }}
-                      className="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                      title="复制日历 ID"
-                    >
-                      📋 复制
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          copyCalendarId(calendar.calendar_id)
+                        }}
+                        className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                        title="复制日历 ID"
+                      >
+                        📋 复制
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteCalendar(calendar.calendar_id, calendar.summary || '(无标题)')
+                        }}
+                        className="px-2 py-1 text-xs bg-red-200 text-red-700 rounded hover:bg-red-300"
+                        title="删除日历"
+                      >
+                        🗑️ 删除
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

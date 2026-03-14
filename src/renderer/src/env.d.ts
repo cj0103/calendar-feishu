@@ -40,6 +40,7 @@ interface Window {
         color?: number
         summaryAlias?: string
       }) => Promise<{ success: boolean; calendar?: FeishuCalendar; error?: string }>
+      deleteCalendar: (calendarId: string) => Promise<{ success: boolean; error?: string }>
       getEvents: (calendarId: string, startTime: number, endTime: number) => Promise<any>
       getEventsWithSyncToken: (calendarId: string, syncToken: string) => Promise<any>
       createEvent: (calendarId: string, eventData: any) => Promise<any>
