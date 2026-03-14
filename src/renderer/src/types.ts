@@ -73,3 +73,68 @@ export interface Settings {
   calendarFontSize: number     // 日历文字大小（px）
   calendarFontFamily: string   // 日历文字字体
 }
+
+/**
+ * 附件类型
+ */
+export type AttachmentType = 'document' | 'image' | 'link' | 'other'
+
+/**
+ * 附件接口
+ */
+export interface Attachment {
+  path: string
+  name: string
+  type: AttachmentType
+}
+
+/**
+ * 导出事件接口
+ */
+export interface ExportEvent {
+  id: string
+  dateTime: {
+    date: string
+    startTime: string
+    endTime: string
+    dayOfWeek: string
+    lunarDate?: string
+  }
+  basicInfo: {
+    title: string
+    location?: string
+    importance: 'high' | 'medium' | 'low'
+  }
+  content: {
+    description: string
+    attachments: Attachment[]
+    rawDescription: string
+  }
+  syncInfo: {
+    source: 'local' | 'feishu'
+    feishuEventId?: string
+    lastSyncTime?: number
+  }
+}
+
+/**
+ * 导出信息接口
+ */
+export interface ExportInfo {
+  exportedAt: string
+  dateRange: {
+    start: string
+    end: string
+  }
+  totalEvents: number
+  withAttachments: number
+  formatVersion: string
+}
+
+/**
+ * 导出数据接口
+ */
+export interface ExportData {
+  exportInfo: ExportInfo
+  events: ExportEvent[]
+}

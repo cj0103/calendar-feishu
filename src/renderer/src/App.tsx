@@ -13,6 +13,29 @@ import { getLunarDateCached } from './utils/lunarUtils'
 // 星期几的显示名称
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 
+/**
+ * 获取星期几的中文名称
+ * @param dateStr 日期字符串（YYYY-MM-DD）
+ * @returns 星期几（如"星期日"）
+ */
+function getDayOfWeek(dateStr: string): string {
+  const date = new Date(dateStr)
+  const day = date.getDay()
+  const weekDaysFull = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  return weekDaysFull[day]
+}
+
+/**
+ * 获取农历日期字符串
+ * @param dateStr 日期字符串（YYYY-MM-DD）
+ * @returns 农历日期（如"正月初一"）
+ */
+function getLunarDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const lunarInfo = getLunarDateCached(date)
+  return lunarInfo.lunarStr || ''
+}
+
 /** 日历日期信息接口 */
 interface CalendarDayInfo {
   date: string
@@ -187,24 +210,51 @@ function App(): JSX.Element {
       return eventDate >= startDate && eventDate <= endDate
     })
 
-    // 2. 构建导出数据（简化结构，适合大模型分析）
+    // 2. 导入工具函数
+    const { extractAttachments, countAttachmentTypes } = await import('./utils/exportUtils')
+
+    // 3. 构建导出数据（大模型友好格式）
     const exportData = {
       exportInfo: {
-        exportDate: new Date().toISOString(),
+        exportedAt: new Date().toISOString(),
         dateRange: {
           start: startDate,
           end: endDate
         },
-        totalEvents: filteredEvents.length
+        totalEvents: filteredEvents.length,
+        withAttachments: filteredEvents.filter(e => e.description && (e.description.includes('\\') || e.description.includes('http'))).length,
+        formatVersion: '2.0'
       },
-      events: filteredEvents.map(event => ({
-        date: event.date,
-        time: event.time,
-        title: event.title,
-        location: event.location,
-        importance: event.importance,
-        description: event.description || ''
-      })),
+      events: filteredEvents.map(event => {
+        // 解析描述，分离文字和附件
+        const { text, attachments } = extractAttachments(event.description || '')
+        
+        return {
+          id: event.id,
+          dateTime: {
+            date: event.date,
+            startTime: event.time,
+            endTime: event.endTime || '',
+            dayOfWeek: getDayOfWeek(event.date),
+            lunarDate: getLunarDate(event.date)
+          },
+          basicInfo: {
+            title: event.title,
+            location: event.location,
+            importance: event.importance
+          },
+          content: {
+            description: text,
+            attachments: attachments,
+            rawDescription: event.description || ''
+          },
+          syncInfo: {
+            source: event.feishuEventId ? 'feishu' : 'local',
+            feishuEventId: event.feishuEventId,
+            lastSyncTime: event.lastSyncTime
+          }
+        }
+      }),
       statistics: {
         byImportance: {
           high: filteredEvents.filter(e => e.importance === 'high').length,
@@ -215,16 +265,23 @@ function App(): JSX.Element {
           const month = event.date.substring(0, 7) // "YYYY-MM"
           acc[month] = (acc[month] || 0) + 1
           return acc
-        }, {} as Record<string, number>)
+        }, {} as Record<string, number>),
+        attachmentTypes: (() => {
+          const allAttachments = filteredEvents.flatMap(event => {
+            const { attachments } = extractAttachments(event.description || '')
+            return attachments
+          })
+          return countAttachmentTypes(allAttachments)
+        })()
       }
     }
 
-    // 3. 调用 IPC 保存文件
+    // 4. 调用 IPC 保存文件
     const defaultFileName = `calendar-export-${startDate}-${endDate}.json`
     const result = await window.api.saveExportFile(exportData, defaultFileName)
 
     if (result.success) {
-      alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程\n文件：${result.filePath}`)
+      alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程\n包含 ${exportData.exportInfo.withAttachments} 个带附件的日程\n文件：${result.filePath}`)
       setIsExportOpen(false)
     } else if (!result.canceled) {
       alert('导出失败：' + result.error)
