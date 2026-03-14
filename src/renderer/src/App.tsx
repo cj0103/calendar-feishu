@@ -799,13 +799,13 @@ function App(): JSX.Element {
                           setMousePosition({ x: e.clientX, y: e.clientY })
                         }
                       }}
-                      className={`text-xs p-0.5 rounded cursor-pointer truncate leading-tight ${
+                      className={`text-xs p-1 rounded cursor-pointer break-words leading-tight ${
                         event.importance === 'high' ? 'bg-red-200 text-red-800' :
                         event.importance === 'medium' ? 'bg-orange-200 text-orange-800' :
                         'bg-gray-200 text-gray-800'
                       }`}
                     >
-                      {event.time} {event.title}
+                      {event.time} {event.title}{event.location ? `（${event.location}）` : ''}
                     </div>
                   ))}
                 </div>
