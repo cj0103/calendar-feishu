@@ -1,7 +1,7 @@
 {
   "name": "desktop-calendar",
-  "version": "1.1.0",
-  "description": "Windows 桌面日历 - 桌面常驻显示日程（支持飞书同步、农历显示）",
+  "version": "1.2.0",
+  "description": "Windows 桌面日历 - 桌面常驻显示日程（支持飞书同步、农历显示、日历管理）",
   "main": "./out/main/index.js",
   "type": "module",
   "author": "",
