@@ -161,8 +161,14 @@ function createWindow(): void {
     mainWindow.focus()
     console.log('Window focus() called')
     // 确保层级设置正确
-    mainWindow.setAlwaysOnBottom(true)
-    console.log('Window setAlwaysOnBottom(true) called in ready-to-show')
+    try {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnBottom(true)
+        console.log('Window setAlwaysOnBottom(true) called in ready-to-show')
+      }
+    } catch (error) {
+      console.log('[AntiMinimize] Window destroyed during setAlwaysOnBottom in ready-to-show')
+    }
   })
 
   mainWindow.on('show', () => {
@@ -170,8 +176,14 @@ function createWindow(): void {
     if (!mainWindow || mainWindow.isDestroyed()) return
     
     // 重新显示时确保层级正确
-    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    mainWindow.setAlwaysOnBottom(true)
+    try {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        mainWindow.setAlwaysOnBottom(true)
+      }
+    } catch (error) {
+      console.log('[AntiMinimize] Window destroyed during setAlwaysOnBottom in show event')
+    }
   })
 
   // 监听窗口最小化事件并快速恢复
@@ -184,10 +196,16 @@ function createWindow(): void {
       if (!mainWindow || mainWindow.isDestroyed()) return
       if (mainWindow.isMinimized()) {
         console.log('[AntiMinimize] Restoring window immediately...')
-        mainWindow.restore()
-        mainWindow.show()
-        mainWindow.setAlwaysOnBottom(true)
-        console.log('[AntiMinimize] Window restored')
+        try {
+          mainWindow.restore()
+          mainWindow.show()
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnBottom(true)
+          }
+          console.log('[AntiMinimize] Window restored')
+        } catch (error) {
+          console.log('[AntiMinimize] Error during restore or window destroyed')
+        }
       }
     })
   })
@@ -233,9 +251,14 @@ function createWindow(): void {
 
   // 启动轮询监控，作为第二道防线（每 200ms 检查一次）
   const preventMinimizePolling = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (!mainWindow) return
 
     try {
+      // 检查窗口是否可用
+      if (mainWindow.isDestroyed()) {
+        return  // 窗口已销毁，停止轮询
+      }
+
       // 如果窗口被最小化但未触发 minimize 事件
       if (mainWindow.isMinimized()) {
         console.log('[AntiMinimize][Polling] Detected minimized state, restoring...')
@@ -250,11 +273,9 @@ function createWindow(): void {
         mainWindow.setAlwaysOnBottom(true)
       }
     } catch (error) {
-      // 窗口可能已被销毁，静默失败
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return  // 停止轮询
-      }
-      console.error('[AntiMinimize][Polling] Error checking window state:', error)
+      // 任何异常都说明窗口可能已损坏，停止轮询
+      console.log('[AntiMinimize][Polling] Error or window destroyed, stopping polling')
+      return  // 停止轮询
     }
 
     setTimeout(preventMinimizePolling, 200)
@@ -276,10 +297,16 @@ app.whenReady().then(() => {
       setImmediate(() => {
         if (!mainWindow || mainWindow.isDestroyed()) return
         if (window.isMinimized()) {
-          window.restore()
-          window.show()
-          window.setAlwaysOnBottom(true)
-          console.log('[AntiMinimize][App] Window restored')
+          try {
+            window.restore()
+            window.show()
+            if (!mainWindow.isDestroyed()) {
+              window.setAlwaysOnBottom(true)
+            }
+            console.log('[AntiMinimize][App] Window restored')
+          } catch (error) {
+            console.log('[AntiMinimize][App] Error during restore or window destroyed')
+          }
         }
       })
     }
@@ -290,7 +317,11 @@ app.whenReady().then(() => {
     if (focusedWindow !== mainWindow) {
       setImmediate(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.setAlwaysOnBottom(true)
+          try {
+            mainWindow.setAlwaysOnBottom(true)
+          } catch (error) {
+            console.log('[AntiMinimize][App] Window destroyed during focus event')
+          }
         }
       })
     }
