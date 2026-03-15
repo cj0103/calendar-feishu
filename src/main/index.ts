@@ -164,17 +164,13 @@ function createWindow(): void {
   })
 
   mainWindow.on('show', () => {
-    console.log('Window show event triggered')
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    
-    // 只在 show 事件中设置可见性，不设置层级
+    // 重新显示时确保在所有工作区可见
     try {
       if (!mainWindow.isDestroyed()) {
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-        console.log('Window setVisibleOnAllWorkspaces called in show event')
       }
     } catch (error) {
-      console.log('[AntiMinimize] Error in show event:', error)
+      // 忽略错误
     }
   })
 
@@ -258,41 +254,48 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 窗口完全显示后再启动轮询监控（延迟 1 秒启动）
+  // 窗口完全显示后，确保始终在底层（延迟 1 秒启动）
   setTimeout(() => {
-    const preventMinimizePolling = () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return
-
+    // 检查窗口是否仍然可用
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('[KeepBottom] Window already destroyed, skipping')
+      return
+    }
+    
+    // 初始设置：确保窗口在底层
+    try {
+      mainWindow.setAlwaysOnBottom(true)
+      console.log('[KeepBottom] Window set to always on bottom')
+    } catch (error) {
+      console.log('[KeepBottom] Error setting always on bottom:', error)
+    }
+    
+    // 监听窗口焦点事件，确保失去焦点时在底层
+    mainWindow.on('blur', () => {
       try {
-        const isVisible = mainWindow.isVisible()
-        const isMinimized = mainWindow.isMinimized()
-        
-        // 如果窗口被最小化 OR 不可见（被隐藏）
-        if (isMinimized || !isVisible) {
-          console.log('[AntiMinimize][Polling] 🚨 DETECTED HIDDEN/MINIMIZED')
-          console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible)
-          
-          // 简单恢复：只调用 show，不设置层级
-          if (isMinimized && mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.restore()
-          }
-          
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.show()
-            console.log('[AntiMinimize][Polling] ✅ Window shown')
-          }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnBottom(true)
+          console.log('[KeepBottom] Window lost focus, ensuring always on bottom')
         }
       } catch (error) {
-        console.log('[AntiMinimize][Polling] Error:', error)
+        // 忽略错误
       }
-
-      setTimeout(preventMinimizePolling, 100)
-    }
-
-    // 启动轮询
-    console.log('[AntiMinimize] Starting polling monitor...')
-    preventMinimizePolling()
-  }, 1000)  // 延迟 1 秒启动轮询
+    })
+    
+    // 监听窗口显示事件，确保显示时在底层
+    mainWindow.on('show', () => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnBottom(true)
+          console.log('[KeepBottom] Window shown, ensuring always on bottom')
+        }
+      } catch (error) {
+        // 忽略错误
+      }
+    })
+    
+    console.log('[KeepBottom] Focus and show event listeners added')
+  }, 1000)  // 延迟 1 秒启动
 }
 
 app.whenReady().then(() => {
