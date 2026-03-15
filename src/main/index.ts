@@ -160,22 +160,14 @@ function createWindow(): void {
     console.log('Window show() called, now calling focus()')
     mainWindow.focus()
     console.log('Window focus() called')
-    // 确保层级设置正确
-    try {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnBottom(true)
-        console.log('Window setAlwaysOnBottom(true) called in ready-to-show')
-      }
-    } catch (error) {
-      console.log('[AntiMinimize] Window destroyed during setAlwaysOnBottom in ready-to-show')
-    }
+    // 不再设置层级，避免窗口销毁
   })
 
   mainWindow.on('show', () => {
     console.log('Window show event triggered')
     if (!mainWindow || mainWindow.isDestroyed()) return
     
-    // 重新显示时确保在所有工作区可见
+    // 只在 show 事件中设置可见性，不设置层级
     try {
       if (!mainWindow.isDestroyed()) {
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -211,35 +203,17 @@ function createWindow(): void {
   
   // 监听窗口隐藏事件
   mainWindow.on('hide', () => {
-    console.log('[AntiMinimize] 🚨 HIDE EVENT DETECTED 🚨')
-    console.log('[AntiMinimize] Showing window immediately...')
+    console.log('[AntiMinimize] 🚨 HIDE EVENT DETECTED')
     
-    // 立即显示窗口 - 每次调用前都检查
+    // 立即显示窗口 - 不设置层级
     if (!mainWindow || mainWindow.isDestroyed()) {
       console.log('[AntiMinimize] Window already destroyed, cannot show')
       return
     }
     
     try {
-      console.log('[AntiMinimize] Calling show()...')
       mainWindow.show()
-      
-      if (!mainWindow.isDestroyed()) {
-        console.log('[AntiMinimize] Calling showInactive()...')
-        mainWindow.showInactive()
-      }
-      
-      if (!mainWindow.isDestroyed()) {
-        console.log('[AntiMinimize] Calling setAlwaysOnBottom()...')
-        mainWindow.setAlwaysOnBottom(true)
-      }
-      
-      if (!mainWindow.isDestroyed()) {
-        console.log('[AntiMinimize] Calling setVisibleOnAllWorkspaces()...')
-        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      }
-      
-      console.log('[AntiMinimize] ✅ WINDOW SHOWN FROM HIDE EVENT ✅')
+      console.log('[AntiMinimize] ✅ WINDOW SHOWN FROM HIDE EVENT')
     } catch (error) {
       console.log('[AntiMinimize] Error during show from hide event:', error)
     }
@@ -284,7 +258,7 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 窗口完全显示后再启动轮询监控（延迟 500ms 启动）
+  // 窗口完全显示后再启动轮询监控（延迟 1 秒启动）
   setTimeout(() => {
     const preventMinimizePolling = () => {
       if (!mainWindow || mainWindow.isDestroyed()) return
@@ -297,28 +271,16 @@ function createWindow(): void {
         if (isMinimized || !isVisible) {
           console.log('[AntiMinimize][Polling] 🚨 DETECTED HIDDEN/MINIMIZED')
           console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible)
-          console.log('[AntiMinimize][Polling] Restoring window...')
           
-          // 先恢复（如果是最小化）
+          // 简单恢复：只调用 show，不设置层级
           if (isMinimized && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.restore()
           }
           
-          // 显示窗口并置顶 - 延迟执行确保窗口稳定
-          setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.show()
-            }
-            
-            setTimeout(() => {
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.showInactive()
-                mainWindow.setAlwaysOnBottom(true)
-                mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-                console.log('[AntiMinimize][Polling] ✅ Window restored and visible')
-              }
-            }, 50)
-          }, 50)
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show()
+            console.log('[AntiMinimize][Polling] ✅ Window shown')
+          }
         }
       } catch (error) {
         console.log('[AntiMinimize][Polling] Error:', error)
@@ -330,7 +292,7 @@ function createWindow(): void {
     // 启动轮询
     console.log('[AntiMinimize] Starting polling monitor...')
     preventMinimizePolling()
-  }, 500)  // 延迟 500ms 启动轮询
+  }, 1000)  // 延迟 1 秒启动轮询
 }
 
 app.whenReady().then(() => {
