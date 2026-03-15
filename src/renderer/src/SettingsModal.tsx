@@ -262,9 +262,14 @@ export default function SettingsModal({
           {/* 窗口标签页 */}
           {activeTab === 'window' && (
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800 mb-3">
-                  窗口位置和大小已自动保存，关闭后重启将自动应用
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-green-900 mb-2">✅ 桌面常驻显示已启用</h3>
+                <p className="text-xs text-green-800 leading-relaxed">
+                  窗口已设置为桌面常驻模式：<br/>
+                  • 显示在壁纸上层，其他应用下层<br/>
+                  • 不在任务栏显示<br/>
+                  • 不在 Alt+Tab 切换列表中出现<br/>
+                  • 窗口位置和大小时刻保存
                 </p>
               </div>
               
@@ -288,6 +293,16 @@ export default function SettingsModal({
                     <div className="text-gray-900 font-medium">{localSettings.windowY}px</div>
                   </div>
                 </div>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-amber-900 mb-2">💡 使用提示</h3>
+                <ul className="text-xs text-amber-800 space-y-1 list-disc list-inside">
+                  <li>右键点击系统托盘图标可快速显示/隐藏窗口</li>
+                  <li>窗口位置会自动保存，下次启动时恢复</li>
+                  <li>开启鼠标穿透模式后可与桌面图标交互</li>
+                  <li>如需调整窗口位置，直接拖拽即可</li>
+                </ul>
               </div>
             </div>
           )}

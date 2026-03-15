@@ -134,7 +134,9 @@ function createWindow(): void {
     skipTaskbar: true,
     resizable: true,
     hasShadow: false,
-    // 关键配置：不置顶，让窗口在其他应用下方
+    // 关键配置：设置窗口层级
+    alwaysOnBottom: true,  // 设置窗口在最底层（壁纸上层，其他应用下层）
+    type: 'toolbar',  // 设置为工具窗口类型，不在 Alt+Tab 中显示
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
@@ -146,6 +148,7 @@ function createWindow(): void {
   // 设置为在所有工作区可见（包括虚拟桌面）
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   console.log('Set window visible on all workspaces')
+  console.log('Desktop calendar mode: alwaysOnBottom=true, type=toolbar')
 
   console.log('Window will show in ready-to-show event')
   mainWindow.on('ready-to-show', () => {
