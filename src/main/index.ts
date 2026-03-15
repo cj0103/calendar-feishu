@@ -211,19 +211,24 @@ function createWindow(): void {
   
   // 监听窗口隐藏事件
   mainWindow.on('hide', () => {
-    console.log('[AntiMinimize] Window hide event detected, showing immediately...')
+    console.log('[AntiMinimize] 🚨 HIDE EVENT DETECTED 🚨')
+    console.log('[AntiMinimize] Showing window immediately...')
     
     // 立即显示窗口
     if (!mainWindow || mainWindow.isDestroyed()) return
     
     try {
+      console.log('[AntiMinimize] Calling show()...')
       mainWindow.show()
+      console.log('[AntiMinimize] Calling showInactive()...')
       mainWindow.showInactive()
+      console.log('[AntiMinimize] Calling setAlwaysOnBottom()...')
       mainWindow.setAlwaysOnBottom(true)
+      console.log('[AntiMinimize] Calling setVisibleOnAllWorkspaces()...')
       mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      console.log('[AntiMinimize] Window shown from hide event')
+      console.log('[AntiMinimize] ✅ WINDOW SHOWN FROM HIDE EVENT ✅')
     } catch (error) {
-      console.log('[AntiMinimize] Error during show from hide event')
+      console.log('[AntiMinimize] Error during show from hide event:', error)
     }
   })
 
@@ -266,7 +271,7 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 启动轮询监控，检测窗口是否被隐藏（每 100ms 检查一次）
+  // 启动轮询监控，检测窗口是否被隐藏（每 50ms 检查一次）
   const preventMinimizePolling = () => {
     if (!mainWindow) return
 
@@ -282,21 +287,27 @@ function createWindow(): void {
       
       // 如果窗口被最小化 OR 不可见（被隐藏）
       if (isMinimized || !isVisible) {
-        console.log('[AntiMinimize][Polling] ===== DETECTED HIDDEN/MINIMIZED =====')
-        console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible, 'restoring...')
+        console.log('[AntiMinimize][Polling] 🚨 DETECTED HIDDEN/MINIMIZED 🚨')
+        console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible)
+        console.log('[AntiMinimize][Polling] Restoring window NOW...')
         
         // 先恢复（如果是最小化）
         if (isMinimized) {
+          console.log('[AntiMinimize][Polling] Calling restore()...')
           mainWindow.restore()
         }
         
         // 显示窗口并置顶
+        console.log('[AntiMinimize][Polling] Calling show()...')
         mainWindow.show()
-        mainWindow.showInactive()  // 关键：不获取焦点地显示
+        console.log('[AntiMinimize][Polling] Calling showInactive()...')
+        mainWindow.showInactive()
+        console.log('[AntiMinimize][Polling] Calling setAlwaysOnBottom()...')
         mainWindow.setAlwaysOnBottom(true)
+        console.log('[AntiMinimize][Polling] Calling setVisibleOnAllWorkspaces()...')
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
         
-        console.log('[AntiMinimize][Polling] ===== RESTORED =====')
+        console.log('[AntiMinimize][Polling] ✅ RESTORED ✅')
       }
     } catch (error) {
       // 任何异常都说明窗口可能已损坏，停止轮询
@@ -304,7 +315,7 @@ function createWindow(): void {
       return  // 停止轮询
     }
 
-    setTimeout(preventMinimizePolling, 100)  // 缩短到 100ms
+    setTimeout(preventMinimizePolling, 50)  // 缩短到 50ms
   }
 
   // 启动轮询
