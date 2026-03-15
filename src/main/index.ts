@@ -175,14 +175,14 @@ function createWindow(): void {
     console.log('Window show event triggered')
     if (!mainWindow || mainWindow.isDestroyed()) return
     
-    // 重新显示时确保层级正确
+    // 重新显示时确保在所有工作区可见
     try {
       if (!mainWindow.isDestroyed()) {
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-        mainWindow.setAlwaysOnBottom(true)
+        console.log('Window setVisibleOnAllWorkspaces called in show event')
       }
     } catch (error) {
-      console.log('[AntiMinimize] Window destroyed during setAlwaysOnBottom in show event')
+      console.log('[AntiMinimize] Error in show event:', error)
     }
   })
 
