@@ -228,7 +228,7 @@ function createWindow(): void {
 
   // 启动轮询监控，作为第二道防线（每 200ms 检查一次）
   const preventMinimizePolling = () => {
-    if (!mainWindow) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
 
     try {
       // 如果窗口被最小化但未触发 minimize 事件
@@ -239,12 +239,16 @@ function createWindow(): void {
         mainWindow.setAlwaysOnBottom(true)
       }
       // 如果窗口不可见但不是最小化
-      else if (!mainWindow.isVisible()) {
+      else if (!mainWindow.isVisible() && !mainWindow.isMinimized()) {
         console.log('[AntiMinimize][Polling] Window not visible, showing...')
         mainWindow.show()
         mainWindow.setAlwaysOnBottom(true)
       }
     } catch (error) {
+      // 窗口可能已被销毁，静默失败
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return  // 停止轮询
+      }
       console.error('[AntiMinimize][Polling] Error checking window state:', error)
     }
 
