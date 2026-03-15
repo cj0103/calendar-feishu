@@ -186,28 +186,30 @@ function createWindow(): void {
     }
   })
 
-  // 监听窗口最小化事件并快速恢复
+  // 监听窗口最小化事件并立即恢复
   mainWindow.on('minimize', (event) => {
-    console.log('[AntiMinimize] Window minimize event detected')
+    console.log('[AntiMinimize] Window minimize event detected, preventing and restoring...')
     event.preventDefault()
     
-    // 使用 setImmediate 立即恢复，减少延迟
-    setImmediate(() => {
-      if (!mainWindow || mainWindow.isDestroyed()) return
-      if (mainWindow.isMinimized()) {
-        console.log('[AntiMinimize] Restoring window immediately...')
-        try {
-          mainWindow.restore()
-          mainWindow.show()
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.setAlwaysOnBottom(true)
-          }
-          console.log('[AntiMinimize] Window restored')
-        } catch (error) {
-          console.log('[AntiMinimize] Error during restore or window destroyed')
-        }
+    // 立即同步恢复，不使用 setImmediate
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    
+    try {
+      // 关键：先 restore 再 show，并且立即执行
+      mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+      
+      // 确保在最底层
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnBottom(true)
+        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       }
-    })
+      
+      console.log('[AntiMinimize] Window immediately restored and focused')
+    } catch (error) {
+      console.log('[AntiMinimize] Error during immediate restore')
+    }
   })
 
   // 处理窗口失去焦点（点击桌面其他地方）
@@ -288,27 +290,29 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.desktop.calendar')
 
-  // 监听应用级别的窗口最小化事件，防止日历被最小化
+  // 监听应用级别的窗口最小化事件，立即恢复
   app.on('browser-window-minimize', (event, window) => {
     if (window === mainWindow) {
-      console.log('[AntiMinimize][App] Minimize event detected, preventing...')
+      console.log('[AntiMinimize][App] Minimize event detected, preventing and restoring...')
       event.preventDefault()
       
-      setImmediate(() => {
-        if (!mainWindow || mainWindow.isDestroyed()) return
-        if (window.isMinimized()) {
-          try {
-            window.restore()
-            window.show()
-            if (!mainWindow.isDestroyed()) {
-              window.setAlwaysOnBottom(true)
-            }
-            console.log('[AntiMinimize][App] Window restored')
-          } catch (error) {
-            console.log('[AntiMinimize][App] Error during restore or window destroyed')
-          }
+      // 立即同步恢复，不使用 setImmediate
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      
+      try {
+        window.restore()
+        window.show()
+        window.focus()
+        
+        if (!mainWindow.isDestroyed()) {
+          window.setAlwaysOnBottom(true)
+          window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
         }
-      })
+        
+        console.log('[AntiMinimize][App] Window immediately restored')
+      } catch (error) {
+        console.log('[AntiMinimize][App] Error during immediate restore')
+      }
     }
   })
 
