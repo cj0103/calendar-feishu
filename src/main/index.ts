@@ -188,15 +188,18 @@ function createWindow(): void {
 
   // 监听窗口最小化事件并立即恢复
   mainWindow.on('minimize', (event) => {
-    console.log('[AntiMinimize] Window minimize event detected, preventing and restoring...')
-    event.preventDefault()
+    console.log('[AntiMinimize] Window minimize event detected')
+    // 注意：event.preventDefault() 在 minimize 事件中可能不起作用
+    // 所以我们依靠下面的恢复逻辑
     
-    // 立即同步恢复，不使用 setImmediate
+    // 立即同步恢复
     if (!mainWindow || mainWindow.isDestroyed()) return
     
     try {
-      // 关键：先 restore 再 show，并且立即执行
+      console.log('[AntiMinimize] Restoring window immediately...')
+      // 关键：使用 restore() 恢复最小化状态
       mainWindow.restore()
+      // 确保窗口显示
       mainWindow.show()
       mainWindow.focus()
       
@@ -206,9 +209,9 @@ function createWindow(): void {
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       }
       
-      console.log('[AntiMinimize] Window immediately restored and focused')
+      console.log('[AntiMinimize] Window restored')
     } catch (error) {
-      console.log('[AntiMinimize] Error during immediate restore')
+      console.log('[AntiMinimize] Error during restore')
     }
   })
 
@@ -251,36 +254,37 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 启动轮询监控，作为第二道防线（每 200ms 检查一次）
+  // 启动轮询监控，作为第二道防线（每 100ms 检查一次）
   const preventMinimizePolling = () => {
     if (!mainWindow) return
 
     try {
       // 检查窗口是否可用
       if (mainWindow.isDestroyed()) {
+        console.log('[AntiMinimize][Polling] Window destroyed, stopping')
         return  // 窗口已销毁，停止轮询
       }
 
-      // 如果窗口被最小化但未触发 minimize 事件
+      // 如果窗口被最小化
       if (mainWindow.isMinimized()) {
-        console.log('[AntiMinimize][Polling] Detected minimized state, restoring...')
+        console.log('[AntiMinimize][Polling] ===== DETECTED MINIMIZED ===== restoring...')
         mainWindow.restore()
         mainWindow.show()
+        mainWindow.focus()
         mainWindow.setAlwaysOnBottom(true)
-      }
-      // 如果窗口不可见但不是最小化
-      else if (!mainWindow.isVisible() && !mainWindow.isMinimized()) {
-        console.log('[AntiMinimize][Polling] Window not visible, showing...')
-        mainWindow.show()
-        mainWindow.setAlwaysOnBottom(true)
+        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        console.log('[AntiMinimize][Polling] ===== RESTORED =====')
+      } else {
+        // 添加调试日志，确认轮询在运行
+        console.log('[AntiMinimize][Polling] Window state: minimized=false, visible=', mainWindow.isVisible())
       }
     } catch (error) {
       // 任何异常都说明窗口可能已损坏，停止轮询
-      console.log('[AntiMinimize][Polling] Error or window destroyed, stopping polling')
+      console.log('[AntiMinimize][Polling] Error:', error)
       return  // 停止轮询
     }
 
-    setTimeout(preventMinimizePolling, 200)
+    setTimeout(preventMinimizePolling, 100)  // 缩短到 100ms
   }
 
   // 启动轮询
