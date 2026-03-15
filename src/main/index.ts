@@ -154,20 +154,24 @@ function createWindow(): void {
   console.log('Window will show in ready-to-show event')
   mainWindow.on('ready-to-show', () => {
     console.log('Window is ready to show, calling show()')
-    mainWindow?.show()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    
+    mainWindow.show()
     console.log('Window show() called, now calling focus()')
-    mainWindow?.focus()
+    mainWindow.focus()
     console.log('Window focus() called')
     // 确保层级设置正确
-    mainWindow?.setAlwaysOnBottom(true)
+    mainWindow.setAlwaysOnBottom(true)
     console.log('Window setAlwaysOnBottom(true) called in ready-to-show')
   })
 
   mainWindow.on('show', () => {
     console.log('Window show event triggered')
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    
     // 重新显示时确保层级正确
-    mainWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    mainWindow?.setAlwaysOnBottom(true)
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    mainWindow.setAlwaysOnBottom(true)
   })
 
   // 监听窗口最小化事件并快速恢复
@@ -177,7 +181,8 @@ function createWindow(): void {
     
     // 使用 setImmediate 立即恢复，减少延迟
     setImmediate(() => {
-      if (mainWindow && mainWindow.isMinimized()) {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      if (mainWindow.isMinimized()) {
         console.log('[AntiMinimize] Restoring window immediately...')
         mainWindow.restore()
         mainWindow.show()
@@ -269,7 +274,8 @@ app.whenReady().then(() => {
       event.preventDefault()
       
       setImmediate(() => {
-        if (mainWindow && window.isMinimized()) {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        if (window.isMinimized()) {
           window.restore()
           window.show()
           window.setAlwaysOnBottom(true)
@@ -283,7 +289,9 @@ app.whenReady().then(() => {
   app.on('browser-window-focus', (_, focusedWindow) => {
     if (focusedWindow !== mainWindow) {
       setImmediate(() => {
-        mainWindow?.setAlwaysOnBottom(true)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnBottom(true)
+        }
       })
     }
   })
