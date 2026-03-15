@@ -23,8 +23,16 @@ interface Window {
     forceShow: () => Promise<void>
     getBounds: () => Promise<{ width: number; height: number; x: number; y: number }>
     setOpacity: (opacity: number) => Promise<void>
-    onWindowMoved: (callback: () => void) => void
-    onWindowResized: (callback: () => void) => void
+    savePosition: (bounds: { x: number; y: number; width: number; height: number }) => Promise<void>
+    getSavedPosition: () => Promise<{ x: number; y: number; width: number; height: number } | null>
+    onWindowMoved: (callback: (x: number, y: number) => void) => void
+    onWindowResized: (callback: (width: number, height: number) => void) => void
+    // 开机自启动相关
+    setAutoLaunch: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
+    getAutoLaunch: () => Promise<boolean>
+    setLaunchHidden: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
+    getLaunchHidden: () => Promise<boolean>
+    // 飞书日历相关
     feishu: {
       getAuthorizeUrl: () => Promise<string>
       isLoggedIn: () => Promise<boolean>

@@ -19,6 +19,24 @@ export default function SettingsModal({
 
   useEffect(() => {
     if (isOpen) {
+      // 读取自启动状态
+      const loadAutoLaunchSettings = async () => {
+        try {
+          const autoLaunch = await window.api?.getAutoLaunch()
+          const launchHidden = await window.api?.getLaunchHidden()
+          
+          setLocalSettings(prev => ({
+            ...prev,
+            autoLaunch: autoLaunch ?? false,
+            launchHidden: launchHidden ?? false
+          }))
+        } catch (error) {
+          console.error('Failed to load auto launch settings:', error)
+        }
+      }
+      
+      loadAutoLaunchSettings()
+      
       setLocalSettings({
         windowOpacity: settings.windowOpacity ?? 100,
         windowWidth: settings.windowWidth ?? 1200,
@@ -303,6 +321,64 @@ export default function SettingsModal({
                   <li>开启鼠标穿透模式后可与桌面图标交互</li>
                   <li>如需调整窗口位置，直接拖拽即可</li>
                 </ul>
+              </div>
+              
+              {/* 开机自启动设置 */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">开机自启动</h3>
+                
+                <div className="space-y-3">
+                  <label className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.autoLaunch || false}
+                      onChange={(e) => {
+                        const enabled = e.target.checked
+                        setLocalSettings(prev => ({ 
+                          ...prev, 
+                          autoLaunch: enabled,
+                          // 如果启用自启动，默认也启用隐藏启动
+                          launchHidden: enabled ? (prev.launchHidden ?? true) : prev.launchHidden
+                        }))
+                        // 立即应用设置
+                        if (window.api) {
+                          window.api.setAutoLaunch(enabled)
+                        }
+                      }}
+                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-900">开机自启动</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        系统启动时自动运行桌面日历
+                      </div>
+                    </div>
+                  </label>
+                  
+                  {localSettings.autoLaunch && (
+                    <label className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.launchHidden || false}
+                        onChange={(e) => {
+                          const enabled = e.target.checked
+                          setLocalSettings(prev => ({ ...prev, launchHidden: enabled }))
+                          // 立即应用设置
+                          if (window.api) {
+                            window.api.setLaunchHidden(enabled)
+                          }
+                        }}
+                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">隐藏启动</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          自启动时不显示窗口，可通过托盘图标显示
+                        </div>
+                      </div>
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
           )}

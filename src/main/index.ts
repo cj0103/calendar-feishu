@@ -367,6 +367,65 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // ==================== 开机自启动相关 IPC 处理 ====================
+  
+  // 设置开机自启动
+  ipcMain.handle('setAutoLaunch', (event, enabled: boolean) => {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        openAsHidden: enabled ? app.getLoginItemSettings().openAsHidden : false,
+        name: '桌面日历'
+      })
+      console.log('[AutoLaunch] Set auto launch:', enabled)
+      return { success: true }
+    } catch (error) {
+      console.error('[AutoLaunch] Error setting auto launch:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 获取开机自启动状态
+  ipcMain.handle('getAutoLaunch', () => {
+    try {
+      const settings = app.getLoginItemSettings()
+      return settings.openAtLogin
+    } catch (error) {
+      console.error('[AutoLaunch] Error getting auto launch:', error)
+      return false
+    }
+  })
+
+  // 设置隐藏启动
+  ipcMain.handle('setLaunchHidden', (event, enabled: boolean) => {
+    try {
+      const currentSettings = app.getLoginItemSettings()
+      app.setLoginItemSettings({
+        openAtLogin: currentSettings.openAtLogin,
+        openAsHidden: enabled,
+        name: '桌面日历'
+      })
+      console.log('[AutoLaunch] Set launch hidden:', enabled)
+      return { success: true }
+    } catch (error) {
+      console.error('[AutoLaunch] Error setting launch hidden:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 获取隐藏启动状态
+  ipcMain.handle('getLaunchHidden', () => {
+    try {
+      const settings = app.getLoginItemSettings()
+      return settings.openAsHidden
+    } catch (error) {
+      console.error('[AutoLaunch] Error getting launch hidden:', error)
+      return false
+    }
+  })
+
+  // ==================== 窗口管理相关 IPC 处理 ====================
+  
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize()
   })

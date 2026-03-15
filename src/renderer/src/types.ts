@@ -88,6 +88,10 @@ export interface Settings {
   calendarColor: string        // 日历文字颜色
   calendarFontSize: number     // 日历文字大小（px）
   calendarFontFamily: string   // 日历文字字体
+  
+  // 开机自启动设置
+  autoLaunch?: boolean         // 是否开机自启动
+  launchHidden?: boolean       // 自启动时是否隐藏窗口
 }
 
 /**

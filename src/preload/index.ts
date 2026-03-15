@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('api', {
   onWindowResized: (callback: (width: number, height: number) => void) => {
     ipcRenderer.on('window:resized', (_, width, height) => callback(width, height))
   },
+  // 开机自启动相关方法
+  setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('setAutoLaunch', enabled),
+  getAutoLaunch: () => ipcRenderer.invoke('getAutoLaunch'),
+  setLaunchHidden: (enabled: boolean) => ipcRenderer.invoke('setLaunchHidden', enabled),
+  getLaunchHidden: () => ipcRenderer.invoke('getLaunchHidden'),
   // 飞书日历相关方法
   feishu: {
     getAuthorizeUrl: () => ipcRenderer.invoke('feishu:getAuthorizeUrl'),
