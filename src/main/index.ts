@@ -186,11 +186,9 @@ function createWindow(): void {
     }
   })
 
-  // 监听窗口最小化事件并立即恢复
+  // 监听窗口最小化/隐藏事件并立即恢复
   mainWindow.on('minimize', (event) => {
     console.log('[AntiMinimize] Window minimize event detected')
-    // 注意：event.preventDefault() 在 minimize 事件中可能不起作用
-    // 所以我们依靠下面的恢复逻辑
     
     // 立即同步恢复
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -201,17 +199,31 @@ function createWindow(): void {
       mainWindow.restore()
       // 确保窗口显示
       mainWindow.show()
-      mainWindow.focus()
-      
-      // 确保在最底层
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnBottom(true)
-        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      }
+      mainWindow.showInactive()  // 不获取焦点地显示
+      mainWindow.setAlwaysOnBottom(true)
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       
       console.log('[AntiMinimize] Window restored')
     } catch (error) {
       console.log('[AntiMinimize] Error during restore')
+    }
+  })
+  
+  // 监听窗口隐藏事件
+  mainWindow.on('hide', () => {
+    console.log('[AntiMinimize] Window hide event detected, showing immediately...')
+    
+    // 立即显示窗口
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    
+    try {
+      mainWindow.show()
+      mainWindow.showInactive()
+      mainWindow.setAlwaysOnBottom(true)
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      console.log('[AntiMinimize] Window shown from hide event')
+    } catch (error) {
+      console.log('[AntiMinimize] Error during show from hide event')
     }
   })
 
@@ -254,7 +266,7 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 启动轮询监控，作为第二道防线（每 100ms 检查一次）
+  // 启动轮询监控，检测窗口是否被隐藏（每 100ms 检查一次）
   const preventMinimizePolling = () => {
     if (!mainWindow) return
 
@@ -265,18 +277,26 @@ function createWindow(): void {
         return  // 窗口已销毁，停止轮询
       }
 
-      // 如果窗口被最小化
-      if (mainWindow.isMinimized()) {
-        console.log('[AntiMinimize][Polling] ===== DETECTED MINIMIZED ===== restoring...')
-        mainWindow.restore()
+      const isVisible = mainWindow.isVisible()
+      const isMinimized = mainWindow.isMinimized()
+      
+      // 如果窗口被最小化 OR 不可见（被隐藏）
+      if (isMinimized || !isVisible) {
+        console.log('[AntiMinimize][Polling] ===== DETECTED HIDDEN/MINIMIZED =====')
+        console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible, 'restoring...')
+        
+        // 先恢复（如果是最小化）
+        if (isMinimized) {
+          mainWindow.restore()
+        }
+        
+        // 显示窗口并置顶
         mainWindow.show()
-        mainWindow.focus()
+        mainWindow.showInactive()  // 关键：不获取焦点地显示
         mainWindow.setAlwaysOnBottom(true)
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        
         console.log('[AntiMinimize][Polling] ===== RESTORED =====')
-      } else {
-        // 添加调试日志，确认轮询在运行
-        console.log('[AntiMinimize][Polling] Window state: minimized=false, visible=', mainWindow.isVisible())
       }
     } catch (error) {
       // 任何异常都说明窗口可能已损坏，停止轮询
