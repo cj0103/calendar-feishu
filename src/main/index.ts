@@ -170,20 +170,21 @@ function createWindow(): void {
     mainWindow?.setAlwaysOnBottom(true)
   })
 
-  // 监听窗口最小化事件并阻止
+  // 监听窗口最小化事件并快速恢复
   mainWindow.on('minimize', (event) => {
-    console.log('Window minimize event detected, preventing...')
+    console.log('[AntiMinimize] Window minimize event detected')
     event.preventDefault()
     
-    // 延迟恢复，确保事件处理完成
-    setTimeout(() => {
-      if (mainWindow) {
+    // 使用 setImmediate 立即恢复，减少延迟
+    setImmediate(() => {
+      if (mainWindow && mainWindow.isMinimized()) {
+        console.log('[AntiMinimize] Restoring window immediately...')
         mainWindow.restore()
         mainWindow.show()
         mainWindow.setAlwaysOnBottom(true)
-        console.log('Window restored and set to always on bottom')
+        console.log('[AntiMinimize] Window restored')
       }
-    }, 50)
+    })
   })
 
   // 处理窗口失去焦点（点击桌面其他地方）
@@ -224,6 +225,34 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // 启动轮询监控，作为第二道防线（每 200ms 检查一次）
+  const preventMinimizePolling = () => {
+    if (!mainWindow) return
+
+    try {
+      // 如果窗口被最小化但未触发 minimize 事件
+      if (mainWindow.isMinimized()) {
+        console.log('[AntiMinimize][Polling] Detected minimized state, restoring...')
+        mainWindow.restore()
+        mainWindow.show()
+        mainWindow.setAlwaysOnBottom(true)
+      }
+      // 如果窗口不可见但不是最小化
+      else if (!mainWindow.isVisible()) {
+        console.log('[AntiMinimize][Polling] Window not visible, showing...')
+        mainWindow.show()
+        mainWindow.setAlwaysOnBottom(true)
+      }
+    } catch (error) {
+      console.error('[AntiMinimize][Polling] Error checking window state:', error)
+    }
+
+    setTimeout(preventMinimizePolling, 200)
+  }
+
+  // 启动轮询
+  preventMinimizePolling()
 }
 
 app.whenReady().then(() => {
@@ -232,17 +261,26 @@ app.whenReady().then(() => {
   // 监听应用级别的窗口最小化事件，防止日历被最小化
   app.on('browser-window-minimize', (event, window) => {
     if (window === mainWindow) {
-      console.log('App-level minimize event detected for calendar, preventing...')
+      console.log('[AntiMinimize][App] Minimize event detected, preventing...')
       event.preventDefault()
       
-      setTimeout(() => {
-        if (mainWindow) {
+      setImmediate(() => {
+        if (mainWindow && window.isMinimized()) {
           window.restore()
           window.show()
           window.setAlwaysOnBottom(true)
-          console.log('Calendar window restored at app level')
+          console.log('[AntiMinimize][App] Window restored')
         }
-      }, 50)
+      })
+    }
+  })
+
+  // 当其他窗口获得焦点时，确保日历层级正确
+  app.on('browser-window-focus', (_, focusedWindow) => {
+    if (focusedWindow !== mainWindow) {
+      setImmediate(() => {
+        mainWindow?.setAlwaysOnBottom(true)
+      })
     }
   })
 
