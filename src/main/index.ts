@@ -134,6 +134,7 @@ function createWindow(): void {
     skipTaskbar: true,
     resizable: true,
     hasShadow: false,
+    minimizable: false,  // 禁用最小化功能
     // 关键配置：设置窗口层级
     alwaysOnBottom: true,  // 设置窗口在最底层（壁纸上层，其他应用下层）
     type: 'toolbar',  // 设置为工具窗口类型，不在 Alt+Tab 中显示
@@ -148,7 +149,7 @@ function createWindow(): void {
   // 设置为在所有工作区可见（包括虚拟桌面）
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   console.log('Set window visible on all workspaces')
-  console.log('Desktop calendar mode: alwaysOnBottom=true, type=toolbar')
+  console.log('Desktop calendar mode: alwaysOnBottom=true, type=toolbar, minimizable=false')
 
   console.log('Window will show in ready-to-show event')
   mainWindow.on('ready-to-show', () => {
@@ -157,12 +158,32 @@ function createWindow(): void {
     console.log('Window show() called, now calling focus()')
     mainWindow?.focus()
     console.log('Window focus() called')
+    // 确保层级设置正确
+    mainWindow?.setAlwaysOnBottom(true)
+    console.log('Window setAlwaysOnBottom(true) called in ready-to-show')
   })
 
   mainWindow.on('show', () => {
     console.log('Window show event triggered')
     // 重新显示时确保层级正确
     mainWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    mainWindow?.setAlwaysOnBottom(true)
+  })
+
+  // 监听窗口最小化事件并阻止
+  mainWindow.on('minimize', (event) => {
+    console.log('Window minimize event detected, preventing...')
+    event.preventDefault()
+    
+    // 延迟恢复，确保事件处理完成
+    setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.restore()
+        mainWindow.show()
+        mainWindow.setAlwaysOnBottom(true)
+        console.log('Window restored and set to always on bottom')
+      }
+    }, 50)
   })
 
   // 处理窗口失去焦点（点击桌面其他地方）
@@ -207,6 +228,23 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.desktop.calendar')
+
+  // 监听应用级别的窗口最小化事件，防止日历被最小化
+  app.on('browser-window-minimize', (event, window) => {
+    if (window === mainWindow) {
+      console.log('App-level minimize event detected for calendar, preventing...')
+      event.preventDefault()
+      
+      setTimeout(() => {
+        if (mainWindow) {
+          window.restore()
+          window.show()
+          window.setAlwaysOnBottom(true)
+          console.log('Calendar window restored at app level')
+        }
+      }, 50)
+    }
+  })
 
   if (app.isPackaged) {
     app.setAsDefaultProtocolClient('feishu-calendar')
