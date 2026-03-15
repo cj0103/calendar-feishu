@@ -284,60 +284,53 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 启动轮询监控，检测窗口是否被隐藏（每 50ms 检查一次）
-  const preventMinimizePolling = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+  // 窗口完全显示后再启动轮询监控（延迟 500ms 启动）
+  setTimeout(() => {
+    const preventMinimizePolling = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
 
-    try {
-      const isVisible = mainWindow.isVisible()
-      const isMinimized = mainWindow.isMinimized()
-      
-      // 如果窗口被最小化 OR 不可见（被隐藏）
-      if (isMinimized || !isVisible) {
-        console.log('[AntiMinimize][Polling] 🚨 DETECTED HIDDEN/MINIMIZED 🚨')
-        console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible)
-        console.log('[AntiMinimize][Polling] Restoring window NOW...')
+      try {
+        const isVisible = mainWindow.isVisible()
+        const isMinimized = mainWindow.isMinimized()
         
-        // 先恢复（如果是最小化）
-        if (isMinimized && mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[AntiMinimize][Polling] Calling restore()...')
-          mainWindow.restore()
+        // 如果窗口被最小化 OR 不可见（被隐藏）
+        if (isMinimized || !isVisible) {
+          console.log('[AntiMinimize][Polling] 🚨 DETECTED HIDDEN/MINIMIZED')
+          console.log('[AntiMinimize][Polling] minimized=', isMinimized, 'visible=', isVisible)
+          console.log('[AntiMinimize][Polling] Restoring window...')
+          
+          // 先恢复（如果是最小化）
+          if (isMinimized && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.restore()
+          }
+          
+          // 显示窗口并置顶 - 延迟执行确保窗口稳定
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show()
+            }
+            
+            setTimeout(() => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.showInactive()
+                mainWindow.setAlwaysOnBottom(true)
+                mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+                console.log('[AntiMinimize][Polling] ✅ Window restored and visible')
+              }
+            }, 50)
+          }, 50)
         }
-        
-        // 显示窗口并置顶 - 每次调用前都检查窗口
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[AntiMinimize][Polling] Calling show()...')
-          mainWindow.show()
-        }
-        
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[AntiMinimize][Polling] Calling showInactive()...')
-          mainWindow.showInactive()
-        }
-        
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[AntiMinimize][Polling] Calling setAlwaysOnBottom()...')
-          mainWindow.setAlwaysOnBottom(true)
-        }
-        
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[AntiMinimize][Polling] Calling setVisibleOnAllWorkspaces()...')
-          mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-        }
-        
-        console.log('[AntiMinimize][Polling] ✅ RESTORED ✅')
+      } catch (error) {
+        console.log('[AntiMinimize][Polling] Error:', error)
       }
-    } catch (error) {
-      // 任何异常都说明窗口可能已损坏，停止轮询
-      console.log('[AntiMinimize][Polling] Error:', error)
-      return  // 停止轮询
+
+      setTimeout(preventMinimizePolling, 100)
     }
 
-    setTimeout(preventMinimizePolling, 50)  // 缩短到 50ms
-  }
-
-  // 启动轮询
-  preventMinimizePolling()
+    // 启动轮询
+    console.log('[AntiMinimize] Starting polling monitor...')
+    preventMinimizePolling()
+  }, 500)  // 延迟 500ms 启动轮询
 }
 
 app.whenReady().then(() => {
