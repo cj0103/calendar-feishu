@@ -214,18 +214,31 @@ function createWindow(): void {
     console.log('[AntiMinimize] 🚨 HIDE EVENT DETECTED 🚨')
     console.log('[AntiMinimize] Showing window immediately...')
     
-    // 立即显示窗口
-    if (!mainWindow || mainWindow.isDestroyed()) return
+    // 立即显示窗口 - 每次调用前都检查
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('[AntiMinimize] Window already destroyed, cannot show')
+      return
+    }
     
     try {
       console.log('[AntiMinimize] Calling show()...')
       mainWindow.show()
-      console.log('[AntiMinimize] Calling showInactive()...')
-      mainWindow.showInactive()
-      console.log('[AntiMinimize] Calling setAlwaysOnBottom()...')
-      mainWindow.setAlwaysOnBottom(true)
-      console.log('[AntiMinimize] Calling setVisibleOnAllWorkspaces()...')
-      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      
+      if (!mainWindow.isDestroyed()) {
+        console.log('[AntiMinimize] Calling showInactive()...')
+        mainWindow.showInactive()
+      }
+      
+      if (!mainWindow.isDestroyed()) {
+        console.log('[AntiMinimize] Calling setAlwaysOnBottom()...')
+        mainWindow.setAlwaysOnBottom(true)
+      }
+      
+      if (!mainWindow.isDestroyed()) {
+        console.log('[AntiMinimize] Calling setVisibleOnAllWorkspaces()...')
+        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      }
+      
       console.log('[AntiMinimize] ✅ WINDOW SHOWN FROM HIDE EVENT ✅')
     } catch (error) {
       console.log('[AntiMinimize] Error during show from hide event:', error)
@@ -273,15 +286,9 @@ function createWindow(): void {
 
   // 启动轮询监控，检测窗口是否被隐藏（每 50ms 检查一次）
   const preventMinimizePolling = () => {
-    if (!mainWindow) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
 
     try {
-      // 检查窗口是否可用
-      if (mainWindow.isDestroyed()) {
-        console.log('[AntiMinimize][Polling] Window destroyed, stopping')
-        return  // 窗口已销毁，停止轮询
-      }
-
       const isVisible = mainWindow.isVisible()
       const isMinimized = mainWindow.isMinimized()
       
@@ -292,20 +299,31 @@ function createWindow(): void {
         console.log('[AntiMinimize][Polling] Restoring window NOW...')
         
         // 先恢复（如果是最小化）
-        if (isMinimized) {
+        if (isMinimized && mainWindow && !mainWindow.isDestroyed()) {
           console.log('[AntiMinimize][Polling] Calling restore()...')
           mainWindow.restore()
         }
         
-        // 显示窗口并置顶
-        console.log('[AntiMinimize][Polling] Calling show()...')
-        mainWindow.show()
-        console.log('[AntiMinimize][Polling] Calling showInactive()...')
-        mainWindow.showInactive()
-        console.log('[AntiMinimize][Polling] Calling setAlwaysOnBottom()...')
-        mainWindow.setAlwaysOnBottom(true)
-        console.log('[AntiMinimize][Polling] Calling setVisibleOnAllWorkspaces()...')
-        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        // 显示窗口并置顶 - 每次调用前都检查窗口
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log('[AntiMinimize][Polling] Calling show()...')
+          mainWindow.show()
+        }
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log('[AntiMinimize][Polling] Calling showInactive()...')
+          mainWindow.showInactive()
+        }
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log('[AntiMinimize][Polling] Calling setAlwaysOnBottom()...')
+          mainWindow.setAlwaysOnBottom(true)
+        }
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log('[AntiMinimize][Polling] Calling setVisibleOnAllWorkspaces()...')
+          mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        }
         
         console.log('[AntiMinimize][Polling] ✅ RESTORED ✅')
       }
