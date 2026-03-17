@@ -16,6 +16,7 @@ interface FeishuCalendar {
 interface Window {
   api: {
     minimize: () => Promise<void>
+    hideWindow: () => Promise<void>
     close: () => Promise<void>
     quit: () => Promise<void>
     setIgnoreMouseEvents: (ignore: boolean) => Promise<void>
@@ -56,5 +57,6 @@ interface Window {
       deleteEvent: (calendarId: string, eventId: string) => Promise<any>
     }
     saveExportFile: (data: any, defaultPath: string) => Promise<any>
+    openImportFile: () => Promise<{ canceled: boolean; filePath?: string; content?: string; error?: string }>
   }
 }

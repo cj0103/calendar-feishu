@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CalendarEvent, CalendarDayInfo, Settings } from '../types'
 import SettingsModal from './SettingsModal'
-import ExportModal from './ExportModal'
+import ImportExportModal from './ImportExportModal'
 import EventFormModal from './EventFormModal'
 import { SyncManager, SyncStatus } from './sync/SyncManager'
 import { FEISHU_CONFIG } from '../../main/feishuConfig'
@@ -94,8 +94,8 @@ function App(): JSX.Element {
     calendarFontSize: 14,
     calendarFontFamily: 'inherit'
   })
-  // 导出功能
-  const [isExportOpen, setIsExportOpen] = useState(false)
+  // 导入导出功能（统一弹窗）
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false)
 
   // 加载节假日数据（应用启动时）
   useEffect(() => {
@@ -133,7 +133,16 @@ function App(): JSX.Element {
           otherMonthColor: parsed.otherMonthColor || '#f3f4f6',
           calendarColor: parsed.calendarColor || '#1f2937',
           calendarFontSize: parsed.calendarFontSize ?? 14,
-          calendarFontFamily: parsed.calendarFontFamily || 'inherit'
+          calendarFontFamily: parsed.calendarFontFamily || 'inherit',
+          // 导航栏设置
+          headerTextColor: parsed.headerTextColor || '#1f2937',
+          headerTextSize: parsed.headerTextSize ?? 18,
+          headerTextFont: parsed.headerTextFont || 'inherit',
+          navButtonColor: parsed.navButtonColor || '#374151',
+          todayButtonColor: parsed.todayButtonColor || '#ffffff',
+          todayButtonBgColor: parsed.todayButtonBgColor || '#2563eb',
+          weekDayTextColor: parsed.weekDayTextColor || '#6b7280',
+          weekDayTextSize: parsed.weekDayTextSize ?? 12
         })
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -260,9 +269,25 @@ function App(): JSX.Element {
 
     if (result.success) {
       alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程\n包含 ${exportData.exportInfo.withAttachments} 个带附件的日程\n文件：${result.filePath}`)
-      setIsExportOpen(false)
     } else if (!result.canceled) {
       alert('导出失败：' + result.error)
+    }
+  }, [events])
+
+  // 导入功能
+  const handleImport = useCallback((newEvents: CalendarEvent[], syncToFeishu: boolean) => {
+    // 合并现有日程和新日程
+    const updatedEvents = [...events, ...newEvents]
+    setEvents(updatedEvents)
+    saveEventsToLocalStorage(updatedEvents)
+    
+    // 如果需要同步到飞书
+    if (syncToFeishu) {
+      newEvents.forEach(event => {
+        setTimeout(() => {
+          syncEventToFeishu(event, false)
+        }, 0)
+      })
     }
   }, [events])
 
@@ -359,7 +384,7 @@ function App(): JSX.Element {
   }
 
   const handleMinimize = (): void => {
-    window.api?.minimize()
+    window.api?.hideWindow()
   }
 
   const handleMouseIgnore = (): void => {
@@ -369,16 +394,32 @@ function App(): JSX.Element {
   const handleSync = async (): Promise<void> => {
     try {
       setSyncStatus(prev => ({ ...prev, syncing: true, error: null }))
+      
+      // 获取队列统计
+      const queueStats = syncManager.getPendingQueueStats()
+      if (queueStats.total > 0) {
+        console.log(`📝 有待同步项目：${queueStats.total} 个（队列会自动处理）`)
+      }
+      
+      // 执行增量同步（飞书 → 本地）
       const result = await syncManager.sync()
+      
       setSyncStatus(prev => ({
         ...prev,
         syncing: false,
         lastSyncTime: Date.now()
       }))
+      
       // 重新加载本地事件
       const savedEvents = localStorage.getItem('calendar-events')
       if (savedEvents) {
         setEvents(JSON.parse(savedEvents))
+      }
+      
+      // 显示同步结果
+      const totalSynced = result.added + result.updated + result.uploaded
+      if (totalSynced > 0) {
+        console.log(`✅ 同步完成！新增 ${result.added}，更新 ${result.updated}，上传 ${result.uploaded}`)
       }
     } catch (error: any) {
       setSyncStatus(prev => ({
@@ -388,6 +429,33 @@ function App(): JSX.Element {
       }))
       console.error('同步失败:', error)
     }
+  }
+  
+  // 清空同步队列
+  const handleClearQueue = (): void => {
+    syncQueue.clear()
+    console.log('✅ 同步队列已清空')
+  }
+  
+  // 诊断功能：检查 localStorage 中事件的 feishuEventId 状态
+  const handleDiagnose = (): void => {
+    const events = syncManager.loadEventsFromLocalStorage()
+    const withoutFeishuId = events.filter(e => !e.feishuEventId)
+    const withFeishuId = events.filter(e => e.feishuEventId)
+    
+    console.log('📊 诊断结果:')
+    console.log(`总事件数：${events.length}`)
+    console.log(`有 feishuEventId: ${withFeishuId.length}`)
+    console.log(`无 feishuEventId: ${withoutFeishuId.length}`)
+    
+    if (withoutFeishuId.length > 0) {
+      console.log('⚠️ 以下事件没有 feishuEventId:')
+      console.log(withoutFeishuId.map(e => ({ id: e.id, title: e.title, date: e.date })))
+    }
+    
+    // 检查队列状态
+    const queueStats = syncManager.getPendingQueueStats()
+    console.log('📝 队列状态:', queueStats)
   }
 
   // 获取今天的日期字符串（本地时间）
@@ -639,12 +707,18 @@ function App(): JSX.Element {
           </button>
           <button 
             onClick={handleSync}
-            className={`w-6 h-6 flex items-center justify-center rounded ${
+            className={`w-6 h-6 flex items-center justify-center rounded relative ${
               syncStatus.syncing ? 'animate-spin bg-blue-200 text-blue-700' : 'hover:bg-green-100 text-green-600'
             }`}
             title={syncStatus.lastSyncTime ? `最后同步：${new Date(syncStatus.lastSyncTime).toLocaleString()}` : '点击同步飞书日历'}
           >
             {syncStatus.error ? '⚠️' : '🔄'}
+            {/* 待同步数量徽章 */}
+            {syncManager.getPendingQueueStats().total > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                {syncManager.getPendingQueueStats().total}
+              </span>
+            )}
           </button>
           <button 
             onClick={handleSettings}
@@ -654,18 +728,11 @@ function App(): JSX.Element {
             ⚙
           </button>
           <button 
-            onClick={() => setIsExportOpen(true)}
-            className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-green-600"
-            title="导出日程"
+            onClick={() => setIsImportExportOpen(true)}
+            className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-purple-600"
+            title="导入/导出日程"
           >
-            📤
-          </button>
-          <button 
-            onClick={handleMinimize}
-            className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-gray-600"
-            title="最小化"
-          >
-            ─
+            📁
           </button>
         </div>
       </div>
@@ -674,22 +741,35 @@ function App(): JSX.Element {
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={handlePrevMonth}
-            className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded"
+            className="px-3 py-1 rounded hover:bg-gray-100"
+            style={{ color: settings.navButtonColor }}
           >
             ‹
           </button>
-          <span className="text-lg font-bold">
+          <span
+            style={{
+              color: settings.headerTextColor,
+              fontSize: `${settings.headerTextSize}px`,
+              fontFamily: settings.headerTextFont,
+              fontWeight: 'bold'
+            }}
+          >
             {calendarBaseDate.getFullYear()}年 {calendarBaseDate.getMonth() + 1}月
           </span>
           <button
             onClick={handleNextMonth}
-            className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded"
+            className="px-3 py-1 rounded hover:bg-gray-100"
+            style={{ color: settings.navButtonColor }}
           >
             ›
           </button>
           <button
             onClick={handleToday}
-            className="px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded ml-2"
+            className="px-2 py-1 text-sm rounded ml-2"
+            style={{
+              color: settings.todayButtonColor,
+              backgroundColor: settings.todayButtonBgColor
+            }}
           >
             今
           </button>
@@ -697,7 +777,14 @@ function App(): JSX.Element {
 
         <div className="grid grid-cols-7 gap-1 mb-1">
           {weekDays.map(day => (
-            <div key={day} className="text-center text-xs font-medium text-gray-500 py-1">
+            <div
+              key={day}
+              className="text-center font-medium py-1"
+              style={{
+                color: settings.weekDayTextColor,
+                fontSize: `${settings.weekDayTextSize}px`
+              }}
+            >
               周{day}
             </div>
           ))}
@@ -823,10 +910,12 @@ function App(): JSX.Element {
         onSaveSettings={handleSaveSettings}
       />
 
-      <ExportModal
-        isOpen={isExportOpen}
-        onClose={() => setIsExportOpen(false)}
+      <ImportExportModal
+        isOpen={isImportExportOpen}
+        onClose={() => setIsImportExportOpen(false)}
+        onImport={handleImport}
         onExport={handleExport}
+        existingEvents={events}
         totalEvents={events.length}
       />
 

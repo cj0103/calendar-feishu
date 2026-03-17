@@ -45,6 +45,8 @@ import {
   findLocalByFeishuId,
   mergeEvents
 } from './syncUtils'
+import { isOnline } from '../utils/networkUtils'
+import { syncQueue, SyncAction } from './syncQueue'
 
 export interface SyncResult {
   added: number
@@ -66,26 +68,170 @@ export class SyncManager {
   private calendarId: string
 
   /**
+   * 执行同步任务（由队列调用）
+   */
+  private async executeSyncTask(task: { action: string; event: CalendarEvent }): Promise<boolean> {
+    console.log(`⏳ 执行同步任务：${task.action} - ${task.event.title}`)
+    
+    try {
+      switch (task.action) {
+        case 'create': {
+          const startTimeStamp = toFeishuTimestamp(task.event.date, task.event.time)
+          const endTimeStamp = Math.floor(new Date(task.event.endTime!).getTime() / 1000)
+          
+          const priorityMarker = task.event.importance !== 'medium' 
+            ? `[优先级：${task.event.importance}]\n` 
+            : ''
+          
+          const feishuEventData = {
+            summary: task.event.title,
+            description: priorityMarker + (task.event.description || ''),
+            start_time: {
+              timestamp: startTimeStamp,
+              timezone: 'Asia/Shanghai'
+            },
+            end_time: {
+              timestamp: endTimeStamp,
+              timezone: 'Asia/Shanghai'
+            },
+            location: task.event.location ? { name: task.event.location } : undefined,
+            need_notification: false
+          }
+          
+          const result = await window.api.feishu.createEvent(
+            this.calendarId,
+            feishuEventData
+          )
+
+          if (result.success && result.event) {
+            task.event.feishuEventId = result.event.event_id
+            task.event.lastSyncTime = Date.now()
+            this.updateLocalEvent(task.event)
+            console.log(`✅ 创建成功：${task.event.title}`)
+            return true
+          }
+          
+          console.error('❌ 创建失败:', result.error)
+          return false
+        }
+        
+        case 'update': {
+          if (!task.event.feishuEventId) {
+            console.warn('⚠️ 无飞书 ID，转为创建')
+            return await this.executeSyncTask({ ...task, action: 'create' })
+          }
+          
+          const updateData: any = {}
+          
+          if (task.event.title) {
+            updateData.summary = task.event.title
+          }
+          
+          if (task.event.description !== undefined || task.event.importance) {
+            const priorityMarker = task.event.importance !== 'medium' 
+              ? `[优先级：${task.event.importance}]\n` 
+              : ''
+            updateData.description = priorityMarker + (task.event.description || '')
+          }
+          
+          if (task.event.date && task.event.time) {
+            updateData.start_time = {
+              timestamp: toFeishuTimestamp(task.event.date, task.event.time),
+              timezone: 'Asia/Shanghai'
+            }
+          }
+          
+          if (task.event.endTime) {
+            updateData.end_time = {
+              timestamp: Math.floor(new Date(task.event.endTime).getTime() / 1000),
+              timezone: 'Asia/Shanghai'
+            }
+          }
+          
+          if (task.event.location && task.event.location.trim()) {
+            updateData.location = { name: task.event.location }
+          }
+          
+          const result = await window.api.feishu.updateEvent(
+            this.calendarId,
+            task.event.feishuEventId,
+            updateData
+          )
+          
+          if (result.success) {
+            task.event.lastSyncTime = Date.now()
+            this.updateLocalEvent(task.event)
+            console.log(`✅ 更新成功：${task.event.title}`)
+            return true
+          }
+          
+          console.error('❌ 更新失败:', result.error)
+          return false
+        }
+        
+        case 'delete': {
+          if (!task.event.feishuEventId) {
+            console.warn('⚠️ 无飞书 ID，无需删除')
+            return true
+          }
+          
+          await window.api.feishu.deleteEvent(
+            this.calendarId,
+            task.event.feishuEventId
+          )
+          
+          console.log(`✅ 删除成功：${task.event.title}`)
+          return true
+        }
+        
+        default:
+          console.error('❌ 未知任务类型:', task.action)
+          return false
+      }
+    } catch (error) {
+      console.error('❌ 同步任务失败:', error)
+      return false
+    }
+  }
+
+  /**
    * 创建同步管理器实例
    * @param calendarId 飞书日历 ID
    */
   constructor(calendarId: string = FEISHU_CONFIG.calendarId) {
     this.calendarId = calendarId
     this.initialize()
+    
+    // 设置队列任务执行器
+    syncQueue.setTaskExecutor(async (task) => {
+      return await this.executeSyncTask(task)
+    })
   }
 
   /**
    * 初始化同步管理器
    * - 从 localStorage 加载 sync_token
    * - 从 localStorage 加载最后同步时间
+   * - 启动时只添加本地独有的数据到队列（没有 feishuEventId）
    */
   async initialize(): Promise<void> {
     this.syncToken = loadSyncToken()
     this.lastSyncTime = loadLastSyncTime()
+    
+    // 启动时只添加本地独有的数据到队列（没有 feishuEventId）
+    const localEvents = this.loadEventsFromLocalStorage()
+    const localOnlyEvents = localEvents.filter(e => !e.feishuEventId)
+    
+    for (const event of localOnlyEvents) {
+      syncQueue.add(event, 'create')
+    }
+    
+    console.log(`📝 启动时添加了 ${localOnlyEvents.length} 个本地独有事件到队列`)
   }
 
   /**
    * 执行同步
+   * 简化逻辑：只处理队列中的本地 → 飞书同步
    */
   async sync(): Promise<SyncResult> {
     if (this.isSyncing) {
@@ -95,35 +241,25 @@ export class SyncManager {
     this.isSyncing = true
     
     try {
-      let result: SyncResult
-
-      if (!this.syncToken) {
-        // 没有 sync_token，执行初次同步
-        result = await this.initialSync()
-      } else {
-        // 增量同步
-        result = await this.incrementalSync()
+      // 只处理队列，不再从飞书同步
+      const queueStats = syncQueue.getStats()
+      
+      console.log(`📝 当前队列：${queueStats.total} 个任务`)
+      
+      // 队列会自动处理，这里只返回统计
+      return {
+        added: 0,
+        updated: 0,
+        deleted: 0,
+        uploaded: queueStats.create + queueStats.update
       }
-
-      this.lastSyncTime = Date.now()
-      saveLastSyncTime(this.lastSyncTime)
-
-      return result
-    } catch (error: any) {
-      console.error('❌ Sync failed:', error)
-      console.error('❌ Error details:', {
-        message: error.message,
-        stack: error.stack,
-        response: error.response?.data
-      })
-      throw error
     } finally {
       this.isSyncing = false
     }
   }
 
   /**
-   * 初次全量同步
+   * 初次全量同步（保留用于首次使用）
    */
   private async initialSync(): Promise<SyncResult> {
     const now = new Date()
@@ -154,15 +290,6 @@ export class SyncManager {
     // 保存到本地
     this.saveEventsToLocalStorage(localEvents)
     
-    // ⭐ 验证保存的数据
-    const savedData = localStorage.getItem('calendar-events')
-    if (savedData) {
-      const parsed = JSON.parse(savedData)
-      if (parsed.length > 0) {
-        // 数据验证通过
-      }
-    }
-
     // 保存 sync_token
     if (result.sync_token) {
       this.syncToken = result.sync_token
@@ -173,238 +300,54 @@ export class SyncManager {
   }
 
   /**
-   * 增量同步
-   */
-  private async incrementalSync(): Promise<SyncResult> {
-    if (!this.syncToken) {
-      return await this.initialSync()
-    }
-
-    const result = await window.api.feishu.getEventsWithSyncToken(
-      this.calendarId,
-      this.syncToken
-    )
-
-    console.log('📥 Incremental sync API response:', {
-      success: result.success,
-      eventsCount: result.events?.length,
-      hasSyncToken: !!result.sync_token,
-      error: result.error
-    })
-    
-    // ⭐ 打印飞书返回的原始事件详情
-    if (result.events && result.events.length > 0) {
-      console.log('⭐ Feishu returned events:', result.events.map((e: any) => ({
-        event_id: e.event_id,
-        summary: e.summary,
-        status: e.status,
-        updated_time: e.updated_time,
-        start_time: e.start_time?.timestamp
-      })))
-    }
-
-    if (!result.success) {
-      throw new Error(result.error || 'Incremental sync failed')
-    }
-
-    const stats = { added: 0, updated: 0, deleted: 0, uploaded: 0 }
-    const localEvents = this.loadEventsFromLocalStorage()
-    
-    // ⭐ 记录本次同步中飞书返回的事件 ID，用于检测本地独有的事件
-    const feishuEventIds = new Set<string>()
-
-    // 处理变更：飞书 → 本地
-    for (const feishuEvent of result.events) {
-      // ⭐ 跳过已取消的日程
-      if (feishuEvent.status === 'cancelled') {
-        continue
-      }
-      
-      feishuEventIds.add(feishuEvent.event_id)
-      
-      const localEvent = findLocalByFeishuId(localEvents, feishuEvent.event_id)
-
-      if (!localEvent) {
-        // 新增日程：飞书有，本地没有 → 添加到本地
-        const newEvent = convertToLocalEvent(feishuEvent)
-        localEvents.push(newEvent)
-        stats.added++
-      } else {
-        // 判断冲突：以最后更新时间为准
-        const feishuUpdateTime = parseInt(feishuEvent.updated_time) * 1000
-        const localUpdateTime = localEvent.lastSyncTime || 0
-
-        if (feishuUpdateTime > localUpdateTime) {
-          // 飞书更新更晚，覆盖本地
-          const updatedEvent = convertToLocalEvent(feishuEvent)
-          updatedEvent.id = localEvent.id // 保持本地 ID
-          const index = localEvents.findIndex(e => e.id === localEvent.id)
-          if (index !== -1) {
-            localEvents[index] = updatedEvent
-          }
-          stats.updated++
-        } else {
-          // 本地更新更晚，同步到飞书
-          await this.syncUpdateToFeishu(localEvent)
-        }
-      }
-    }
-    
-    // ⭐ 本地独有的事件：上传到飞书
-    const localOnlyEvents = localEvents.filter(event => 
-      !event.feishuEventId // 没有飞书 ID，说明是本地独有的
-    )
-    
-    for (const event of localOnlyEvents) {
-      const success = await this.syncCreateToFeishu(event)
-      if (success) {
-        stats.uploaded++
-      }
-    }
-
-    // 保存更新后的本地数据
-    this.saveEventsToLocalStorage(localEvents)
-
-    // 保存新的 sync_token
-    if (result.sync_token) {
-      this.syncToken = result.sync_token
-      saveSyncToken(result.sync_token)
-    }
-
-    return stats
-  }
-
-  /**
    * 同步单个日程到飞书（创建）
+   * 直接加入队列，由队列统一调度
+   * @returns 是否成功加入队列
    */
   async syncCreateToFeishu(event: CalendarEvent): Promise<boolean> {
-    try {
-      const startTimeStamp = toFeishuTimestamp(event.date, event.time)
-      const endTimeStamp = Math.floor(new Date(event.endTime!).getTime() / 1000)
-      
-      // ⭐ 在 description 中添加优先级标记
-      const priorityMarker = event.importance !== 'medium' 
-        ? `[优先级：${event.importance}]\n` 
-        : ''
-      
-      const feishuEventData = {
-        summary: event.title,  // ✅ 无前缀
-        description: priorityMarker + (event.description || ''),
-        start_time: {
-          timestamp: startTimeStamp,
-          timezone: 'Asia/Shanghai'
-        },
-        end_time: {
-          timestamp: endTimeStamp,
-          timezone: 'Asia/Shanghai'
-        },
-        // ⭐ location 作为对象传递（飞书 API 要求 event_location 类型）
-        location: event.location ? { name: event.location } : undefined,
-        need_notification: false
-      }
-      
-      const result = await window.api.feishu.createEvent(
-        this.calendarId,
-        feishuEventData
-      )
-
-      if (result.success && result.event) {
-        // ⭐ 关键：保存飞书返回的 event_id
-        event.feishuEventId = result.event.event_id
-        event.lastSyncTime = Date.now()
-        
-        // 更新本地存储
-        this.updateLocalEvent(event)
-        
-        return true
-      }
-      
-      console.error('❌ Failed to create in Feishu:', result.error)
-      return false
-    } catch (error) {
-      console.error('Sync create to Feishu failed:', error)
-      return false
+    // 检查队列中是否已有该事件
+    const existingTasks = syncQueue.getAll()
+    const alreadyInQueue = existingTasks.some(task => 
+      task.eventId === event.id && task.action === 'create'
+    )
+    
+    if (!alreadyInQueue) {
+      syncQueue.add(event, 'create')
+      return true  // 成功加入队列
+    } else {
+      console.log(`⏭️ 事件已在队列中，跳过：${event.title}`)
+      return false  // 已在队列中
     }
   }
 
   /**
    * 同步单个日程到飞书（更新）
+   * 直接加入队列，由队列统一调度
+   * @returns 是否成功加入队列
    */
   async syncUpdateToFeishu(event: CalendarEvent): Promise<boolean> {
-    try {
-      // ⭐ 防御性检查：如果没有 feishuEventId，转为创建
-      if (!event.feishuEventId) {
-        return await this.syncCreateToFeishu(event)
-      }
-      
-      const updateData: any = {}
-      
-      // ⭐ 只包含要更新的字段
-      if (event.title) {
-        updateData.summary = event.title
-      }
-      // ⭐ 如果 description 或 importance 有变化，需要重新构建 description（包含优先级标记）
-      if (event.description !== undefined || event.importance) {
-        const priorityMarker = event.importance !== 'medium' 
-          ? `[优先级：${event.importance}]\n` 
-          : ''
-        updateData.description = priorityMarker + (event.description || '')
-      }
-      if (event.date && event.time) {
-        updateData.start_time = {
-          timestamp: toFeishuTimestamp(event.date, event.time),
-          timezone: 'Asia/Shanghai'
-        }
-      }
-      if (event.endTime) {
-        updateData.end_time = {
-          timestamp: Math.floor(new Date(event.endTime).getTime() / 1000),
-          timezone: 'Asia/Shanghai'
-        }
-      }
-      // ⭐ location 字段需要特殊处理：飞书 API 要求 location 是对象或省略
-      if (event.location && event.location.trim()) {
-        updateData.location = { name: event.location }
-      }
-      
-      const result = await window.api.feishu.updateEvent(
-        this.calendarId,
-        event.feishuEventId,
-        updateData
-      )
-      
-      if (result.success) {
-        event.lastSyncTime = Date.now()
-        this.updateLocalEvent(event)
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error('Sync update to Feishu failed:', error)
-      return false
+    // 检查队列中是否已有该事件
+    const existingTasks = syncQueue.getAll()
+    const alreadyInQueue = existingTasks.some(task => 
+      task.eventId === event.id && (task.action === 'update' || task.action === 'create')
+    )
+    
+    if (!alreadyInQueue) {
+      syncQueue.add(event, 'update')
+      return true  // 成功加入队列
+    } else {
+      console.log(`⏭️ 事件已在队列中，跳过：${event.title}`)
+      return false  // 已在队列中
     }
   }
 
   /**
    * 从飞书删除日程
+   * 直接加入队列，由队列统一调度
    */
-  async syncDeleteFromFeishu(event: CalendarEvent): Promise<boolean> {
-    try {
-      // ⭐ 防御性检查：如果没有 feishuEventId，无需删除
-      if (!event.feishuEventId) {
-        return true
-      }
-      
-      await window.api.feishu.deleteEvent(
-        this.calendarId,
-        event.feishuEventId
-      )
-      
-      return true
-    } catch (error) {
-      console.error('Sync delete from Feishu failed:', error)
-      return false
-    }
+  async syncDeleteFromFeishu(event: CalendarEvent): Promise<void> {
+    // 直接加入队列，不立即执行
+    syncQueue.add(event, 'delete')
   }
 
   /**
@@ -416,6 +359,13 @@ export class SyncManager {
       lastSyncTime: this.lastSyncTime,
       error: null
     }
+  }
+
+  /**
+   * 获取同步队列统计
+   */
+  getPendingQueueStats() {
+    return syncQueue.getStats()
   }
 
   /**
@@ -439,11 +389,33 @@ export class SyncManager {
    * 更新单个事件
    */
   private updateLocalEvent(event: CalendarEvent): void {
+    console.log(`📝 更新本地事件：${event.id} (${event.title}), feishuEventId: ${event.feishuEventId}`)
+    
     const events = this.loadEventsFromLocalStorage()
     const index = events.findIndex(e => e.id === event.id)
     if (index !== -1) {
+      console.log(`  - 找到事件，索引：${index}, 原 feishuEventId: ${events[index].feishuEventId}`)
       events[index] = event
       this.saveEventsToLocalStorage(events)
+      
+      // 验证保存
+      const saved = localStorage.getItem('calendar-events')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          const savedEvent = parsed.find((e: any) => e.id === event.id)
+          if (savedEvent?.feishuEventId !== event.feishuEventId) {
+            console.error(`❌ 保存失败！feishuEventId 未正确保存`)
+            console.log(`  - 期望：${event.feishuEventId}, 实际：${savedEvent?.feishuEventId}`)
+          } else {
+            console.log(`  - ✅ 保存成功！feishuEventId: ${savedEvent?.feishuEventId}`)
+          }
+        } catch (error) {
+          console.error('❌ 解析保存的数据失败:', error)
+        }
+      }
+    } else {
+      console.warn(`⚠️ 未找到事件，无法更新：${event.id}`)
     }
   }
 }

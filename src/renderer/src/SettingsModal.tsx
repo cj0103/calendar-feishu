@@ -48,7 +48,16 @@ export default function SettingsModal({
         otherMonthColor: settings.otherMonthColor || '#f3f4f6',
         calendarColor: settings.calendarColor || '#1f2937',
         calendarFontSize: settings.calendarFontSize ?? 14,
-        calendarFontFamily: settings.calendarFontFamily || 'inherit'
+        calendarFontFamily: settings.calendarFontFamily || 'inherit',
+        // 导航栏设置
+        headerTextColor: settings.headerTextColor || '#1f2937',
+        headerTextSize: settings.headerTextSize ?? 18,
+        headerTextFont: settings.headerTextFont || 'inherit',
+        navButtonColor: settings.navButtonColor || '#374151',
+        todayButtonColor: settings.todayButtonColor || '#ffffff',
+        todayButtonBgColor: settings.todayButtonBgColor || '#2563eb',
+        weekDayTextColor: settings.weekDayTextColor || '#6b7280',
+        weekDayTextSize: settings.weekDayTextSize ?? 12
       })
     }
   }, [isOpen, settings])
@@ -186,91 +195,334 @@ export default function SettingsModal({
                   </div>
                 </div>
               </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">导航按钮颜色</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">上月/下月按钮</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={localSettings.navButtonColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, navButtonColor: e.target.value }))}
+                        placeholder="#374151"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.navButtonColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, navButtonColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">今日按钮文字</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={localSettings.todayButtonColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, todayButtonColor: e.target.value }))}
+                        placeholder="#ffffff"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.todayButtonColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, todayButtonColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">今日按钮背景</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={localSettings.todayButtonBgColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, todayButtonBgColor: e.target.value }))}
+                        placeholder="#2563eb"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.todayButtonBgColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, todayButtonBgColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
           {/* 文字标签页 */}
           {activeTab === 'text' && (
             <div className="space-y-4">
-              {/* 日历文字颜色 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  日历文字颜色（公历和农历）
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={localSettings.calendarColor}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarColor: e.target.value }))}
-                    placeholder="#1f2937"
-                    className="w-28 px-2 py-1 text-sm border border-gray-300 rounded"
-                  />
-                  <input
-                    type="color"
-                    value={localSettings.calendarColor}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarColor: e.target.value }))}
-                    className="w-8 h-8 cursor-pointer"
-                  />
+              {/* 分组 1：顶部导航文字 */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">顶部导航文字</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      月份文字颜色
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={localSettings.headerTextColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, headerTextColor: e.target.value }))}
+                        placeholder="#1f2937"
+                        className="w-28 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.headerTextColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, headerTextColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      月份文字大小：{localSettings.headerTextSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min="12"
+                      max="24"
+                      step="1"
+                      value={localSettings.headerTextSize}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value)
+                        setLocalSettings(prev => ({ ...prev, headerTextSize: value }))
+                      }}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>12px</span>
+                      <span>24px</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      月份文字字体
+                    </label>
+                    <select
+                      value={localSettings.headerTextFont}
+                      onChange={(e) => setLocalSettings(prev => ({ ...prev, headerTextFont: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="inherit">默认字体</option>
+                      <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
+                      <option value="'SimSun', serif">宋体</option>
+                      <option value="'SimHei', sans-serif">黑体</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* 日历文字大小 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  日历文字大小：{localSettings.calendarFontSize}px
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="24"
-                  step="1"
-                  value={localSettings.calendarFontSize}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value)
-                    setLocalSettings(prev => ({ ...prev, calendarFontSize: value }))
-                  }}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>10px</span>
-                  <span>24px</span>
+              {/* 分组 2：星期标题文字 */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">星期标题文字</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      星期文字颜色
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={localSettings.weekDayTextColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, weekDayTextColor: e.target.value }))}
+                        placeholder="#6b7280"
+                        className="w-28 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.weekDayTextColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, weekDayTextColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      星期文字大小：{localSettings.weekDayTextSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="16"
+                      step="1"
+                      value={localSettings.weekDayTextSize}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value)
+                        setLocalSettings(prev => ({ ...prev, weekDayTextSize: value }))
+                      }}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>10px</span>
+                      <span>16px</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* 日历文字字体 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  日历文字字体
-                </label>
-                <select
-                  value={localSettings.calendarFontFamily}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarFontFamily: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="inherit">默认字体</option>
-                  <option value="Arial, sans-serif">Arial</option>
-                  <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
-                  <option value="'SimSun', serif">宋体</option>
-                  <option value="'SimHei', sans-serif">黑体</option>
-                  <option value="consolas, monospace">Consolas (等宽)</option>
-                  <option value="'Courier New', monospace">Courier New</option>
-                </select>
+              {/* 分组 3：日期文字（现有内容） */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">日期文字</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      日历文字颜色（公历和农历）
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={localSettings.calendarColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarColor: e.target.value }))}
+                        placeholder="#1f2937"
+                        className="w-28 px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <input
+                        type="color"
+                        value={localSettings.calendarColor}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarColor: e.target.value }))}
+                        className="w-8 h-8 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      日历文字大小：{localSettings.calendarFontSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="24"
+                      step="1"
+                      value={localSettings.calendarFontSize}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value)
+                        setLocalSettings(prev => ({ ...prev, calendarFontSize: value }))
+                      }}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>10px</span>
+                      <span>24px</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      日历文字字体
+                    </label>
+                    <select
+                      value={localSettings.calendarFontFamily}
+                      onChange={(e) => setLocalSettings(prev => ({ ...prev, calendarFontFamily: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="inherit">默认字体</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
+                      <option value="'SimSun', serif">宋体</option>
+                      <option value="'SimHei', sans-serif">黑体</option>
+                      <option value="consolas, monospace">Consolas (等宽)</option>
+                      <option value="'Courier New', monospace">Courier New</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              {/* 预览区域 */}
-              <div className="border-t pt-4 mt-4">
+              {/* 分组 4：预览区域（扩大） */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-white">
                 <p className="text-sm font-medium text-gray-700 mb-3">预览效果</p>
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div 
-                    className="flex items-center gap-3"
-                    style={{
-                      color: localSettings.calendarColor,
-                      fontSize: `${localSettings.calendarFontSize}px`,
-                      fontFamily: localSettings.calendarFontFamily
-                    }}
-                  >
-                    <span className="font-medium">15</span>
-                    <span className="opacity-75">腊月廿五</span>
+                  {/* 预览顶部导航 */}
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                    <button
+                      style={{ color: localSettings.navButtonColor }}
+                      className="px-2 py-1 rounded hover:bg-gray-200"
+                    >
+                      ‹
+                    </button>
+                    <span
+                      style={{
+                        color: localSettings.headerTextColor,
+                        fontSize: `${localSettings.headerTextSize}px`,
+                        fontFamily: localSettings.headerTextFont,
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      2026 年 3 月
+                    </span>
+                    <button
+                      style={{ color: localSettings.navButtonColor }}
+                      className="px-2 py-1 rounded hover:bg-gray-200"
+                    >
+                      ›
+                    </button>
+                    <button
+                      style={{
+                        color: localSettings.todayButtonColor,
+                        backgroundColor: localSettings.todayButtonBgColor
+                      }}
+                      className="px-2 py-1 text-sm rounded ml-2"
+                    >
+                      今
+                    </button>
+                  </div>
+                  {/* 预览星期标题 */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['一', '二', '三', '四', '五', '六', '日'].map(day => (
+                      <div
+                        key={day}
+                        className="text-center font-medium py-1"
+                        style={{
+                          color: localSettings.weekDayTextColor,
+                          fontSize: `${localSettings.weekDayTextSize}px`
+                        }}
+                      >
+                        周{day}
+                      </div>
+                    ))}
+                  </div>
+                  {/* 预览日期 */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {[15, 16, 17, 18, 19, 20, 21].map(day => (
+                      <div
+                        key={day}
+                        className="text-center p-2 border border-gray-200 rounded bg-white"
+                      >
+                        <div
+                          style={{
+                            color: localSettings.calendarColor,
+                            fontSize: `${localSettings.calendarFontSize}px`,
+                            fontFamily: localSettings.calendarFontFamily
+                          }}
+                        >
+                          {day}
+                        </div>
+                        <div
+                          className="opacity-75"
+                          style={{
+                            fontSize: `${Math.max(10, localSettings.calendarFontSize - 2)}px`,
+                            fontFamily: localSettings.calendarFontFamily
+                          }}
+                        >
+                          腊月
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

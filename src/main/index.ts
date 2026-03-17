@@ -76,10 +76,17 @@ function createTray(): void {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示日历',
+      label: '显示/隐藏',
       click: () => {
-        mainWindow?.show()
-        mainWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        if (mainWindow?.isVisible()) {
+          // 如果已经显示，则隐藏
+          mainWindow.hide()
+        } else {
+          // 如果隐藏，则显示
+          mainWindow?.show()
+          mainWindow?.focus()
+          mainWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        }
       }
     },
     {
@@ -90,6 +97,7 @@ function createTray(): void {
         mainWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       }
     },
+    { type: 'separator' },
     {
       label: '退出',
       click: () => {
@@ -171,47 +179,6 @@ function createWindow(): void {
       }
     } catch (error) {
       // 忽略错误
-    }
-  })
-
-  // 监听窗口最小化/隐藏事件并立即恢复
-  mainWindow.on('minimize', (event) => {
-    console.log('[AntiMinimize] Window minimize event detected')
-    
-    // 立即同步恢复
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    
-    try {
-      console.log('[AntiMinimize] Restoring window immediately...')
-      // 关键：使用 restore() 恢复最小化状态
-      mainWindow.restore()
-      // 确保窗口显示
-      mainWindow.show()
-      mainWindow.showInactive()  // 不获取焦点地显示
-      mainWindow.setAlwaysOnBottom(true)
-      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      
-      console.log('[AntiMinimize] Window restored')
-    } catch (error) {
-      console.log('[AntiMinimize] Error during restore')
-    }
-  })
-  
-  // 监听窗口隐藏事件
-  mainWindow.on('hide', () => {
-    console.log('[AntiMinimize] 🚨 HIDE EVENT DETECTED')
-    
-    // 立即显示窗口 - 不设置层级
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      console.log('[AntiMinimize] Window already destroyed, cannot show')
-      return
-    }
-    
-    try {
-      mainWindow.show()
-      console.log('[AntiMinimize] ✅ WINDOW SHOWN FROM HIDE EVENT')
-    } catch (error) {
-      console.log('[AntiMinimize] Error during show from hide event:', error)
     }
   })
 
@@ -301,32 +268,6 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.desktop.calendar')
 
-  // 监听应用级别的窗口最小化事件，立即恢复
-  app.on('browser-window-minimize', (event, window) => {
-    if (window === mainWindow) {
-      console.log('[AntiMinimize][App] Minimize event detected, preventing and restoring...')
-      event.preventDefault()
-      
-      // 立即同步恢复，不使用 setImmediate
-      if (!mainWindow || mainWindow.isDestroyed()) return
-      
-      try {
-        window.restore()
-        window.show()
-        window.focus()
-        
-        if (!mainWindow.isDestroyed()) {
-          window.setAlwaysOnBottom(true)
-          window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-        }
-        
-        console.log('[AntiMinimize][App] Window immediately restored')
-      } catch (error) {
-        console.log('[AntiMinimize][App] Error during immediate restore')
-      }
-    }
-  })
-
   // 当其他窗口获得焦点时，确保日历层级正确
   app.on('browser-window-focus', (_, focusedWindow) => {
     if (focusedWindow !== mainWindow) {
@@ -335,7 +276,7 @@ app.whenReady().then(() => {
           try {
             mainWindow.setAlwaysOnBottom(true)
           } catch (error) {
-            console.log('[AntiMinimize][App] Window destroyed during focus event')
+            console.log('[KeepBottom] Window destroyed during focus event')
           }
         }
       })
@@ -428,6 +369,12 @@ app.whenReady().then(() => {
   
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize()
+  })
+
+  ipcMain.handle('window:hide', () => {
+    if (mainWindow) {
+      mainWindow.hide()
+    }
   })
 
   ipcMain.handle('window:close', () => {
@@ -849,6 +796,38 @@ app.whenReady().then(() => {
     }
     
     return { success: false, canceled: true }
+  })
+
+  // 导入文件选择
+  ipcMain.handle('import:openFile', async () => {
+    const { dialog } = require('electron')
+    const { readFileSync } = require('fs')
+    
+    const result = await dialog.showOpenDialog({
+      title: '选择要导入的 JSON 文件',
+      filters: [
+        { name: 'JSON 文件', extensions: ['json'] }
+      ],
+      properties: ['openFile']
+    })
+    
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true }
+    }
+    
+    try {
+      const content = readFileSync(result.filePaths[0], 'utf-8')
+      return {
+        canceled: false,
+        filePath: result.filePaths[0],
+        content
+      }
+    } catch (error: any) {
+      return { 
+        canceled: false, 
+        error: error.message 
+      }
+    }
   })
 
   createWindow()

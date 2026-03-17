@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electron', electronAPI)
 
 contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
+  hideWindow: () => ipcRenderer.invoke('window:hide'),
   close: () => ipcRenderer.invoke('window:close'),
   quit: () => ipcRenderer.invoke('window:quit'),
   setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.invoke('window:setIgnoreMouseEvents', ignore),
@@ -59,5 +60,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   // 导出功能
   saveExportFile: (data: any, defaultPath: string) => 
-    ipcRenderer.invoke('export:saveFile', data, defaultPath)
+    ipcRenderer.invoke('export:saveFile', data, defaultPath),
+  // 导入功能
+  openImportFile: () => 
+    ipcRenderer.invoke('import:openFile')
 })

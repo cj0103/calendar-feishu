@@ -89,6 +89,16 @@ export interface Settings {
   calendarFontSize: number     // 日历文字大小（px）
   calendarFontFamily: string   // 日历文字字体
   
+  // 导航栏设置
+  headerTextColor: string      // 顶部月份文字颜色
+  headerTextSize: number       // 顶部月份文字大小
+  headerTextFont: string       // 顶部月份字体
+  navButtonColor: string       // 导航按钮颜色（上月/下月箭头）
+  todayButtonColor: string     // 今日按钮文字颜色
+  todayButtonBgColor: string   // 今日按钮背景颜色
+  weekDayTextColor: string     // 星期标题文字颜色
+  weekDayTextSize: number      // 星期标题文字大小
+  
   // 开机自启动设置
   autoLaunch?: boolean         // 是否开机自启动
   launchHidden?: boolean       // 自启动时是否隐藏窗口

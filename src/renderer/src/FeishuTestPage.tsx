@@ -216,14 +216,146 @@ export function FeishuTestPage(): JSX.Element {
     }
   }
   
-  // ⭐ 同步所有显示的日程到本地
-  const syncToCalendar = async () => {
-    if (events.length === 0) {
-      alert('没有可同步的日程')
+  // ⭐ 从飞书全量同步（不依赖当前显示的 events）
+  const handleFullSync = async (syncCalendarId: string) => {
+    if (!syncCalendarId) {
+      alert('请先选择日历')
       return
     }
     
-    const confirmed = confirm(`确定要同步 ${events.length} 个日程到本地日历吗？`)
+    const confirmed = confirm(`确定要从飞书全量同步该日历的所有日程到本地吗？\n\n• 将获取过去 3 个月 + 未来 2 周的所有日程\n• 已存在的日程会更新\n• 适用于首次使用或数据恢复场景`)
+    if (!confirmed) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // 计算时间范围（过去 3 个月 + 未来 2 周）
+      const now = new Date()
+      const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 3600000)
+      const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 3600000)
+      
+      console.log('📅 全量同步时间范围:', {
+        startTime: threeMonthsAgo.toISOString(),
+        endTime: twoWeeksLater.toISOString(),
+        startTimeStamp: Math.floor(threeMonthsAgo.getTime() / 1000),
+        endTimeStamp: Math.floor(twoWeeksLater.getTime() / 1000)
+      })
+      
+      // 获取飞书事件
+      const result = await window.api.feishu.getEvents(
+        syncCalendarId,
+        Math.floor(threeMonthsAgo.getTime() / 1000),
+        Math.floor(twoWeeksLater.getTime() / 1000)
+      )
+      
+      if (!result.success) {
+        throw new Error(result.error || '获取事件失败')
+      }
+      
+      const feishuEvents = result.events || []
+      console.log(`📥 从飞书获取了 ${feishuEvents.length} 个事件`)
+      
+      // 加载本地事件
+      const localEvents = JSON.parse(localStorage.getItem('calendar-events') || '[]')
+      
+      let updateCount = 0
+      let createCount = 0
+      let skipCount = 0
+      
+      // 创建 event_id 到本地事件的映射
+      const localEventMap = new Map<string, any>()
+      localEvents.forEach((e: any) => {
+        if (e.feishuEventId) {
+          localEventMap.set(e.feishuEventId, e)
+        }
+      })
+      
+      // 处理每个飞书事件
+      for (const feishuEvent of feishuEvents) {
+        // 跳过已取消的事件
+        if (feishuEvent.status === 'cancelled') {
+          console.log('⏭️ 跳过已取消事件:', feishuEvent.summary)
+          continue
+        }
+        
+        const startTime = new Date(parseInt(feishuEvent.start_time.timestamp) * 1000)
+        const date = startTime.toISOString().split('T')[0]
+        const time = startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+        
+        const existingEvent = localEventMap.get(feishuEvent.event_id)
+        
+        if (existingEvent) {
+          // 更新现有事件
+          existingEvent.title = feishuEvent.summary
+          existingEvent.date = date
+          existingEvent.time = time
+          existingEvent.location = feishuEvent.location?.name || ''
+          existingEvent.description = feishuEvent.description || ''
+          existingEvent.endTime = new Date(parseInt(feishuEvent.end_time.timestamp) * 1000).toISOString()
+          existingEvent.lastSyncTime = Date.now()
+          
+          updateCount++
+          console.log('🔄 更新事件:', feishuEvent.summary)
+        } else {
+          // 创建新事件
+          const newEvent = {
+            id: `${syncCalendarId}-${feishuEvent.event_id}`,
+            date,
+            time,
+            title: feishuEvent.summary,
+            location: feishuEvent.location?.name || '',
+            importance: 'medium' as const,
+            description: feishuEvent.description || '',
+            feishuEventId: feishuEvent.event_id,
+            endTime: new Date(parseInt(feishuEvent.end_time.timestamp) * 1000).toISOString(),
+            lastSyncTime: Date.now()
+          }
+          
+          localEvents.push(newEvent)
+          createCount++
+          console.log('✅ 创建事件:', newEvent.title)
+        }
+      }
+      
+      // 保存到 localStorage
+      localStorage.setItem('calendar-events', JSON.stringify(localEvents))
+      
+      // ⭐ 清除同步队列中该日历的所有任务（因为已经从飞书同步了）
+      const syncQueueStr = localStorage.getItem('sync-queue-v2')
+      if (syncQueueStr) {
+        const queue = JSON.parse(syncQueueStr)
+        const filteredQueue = queue.filter((task: any) => {
+          // 保留不是该日历的任务
+          return !task.eventId.startsWith(`${syncCalendarId}-`)
+        })
+        localStorage.setItem('sync-queue-v2', JSON.stringify(filteredQueue))
+        console.log(`🗑️ 清除了 ${queue.length - filteredQueue.length} 个该日历的队列任务`)
+      }
+      
+      alert(`✅ 全量同步完成！\n新增：${createCount} 个\n更新：${updateCount} 个\n跳过：${skipCount} 个\n总计：${localEvents.length} 个`)
+      
+      console.log(`✅ 全量同步完成：新增${createCount}个，更新${updateCount}个，跳过${skipCount}个`)
+      
+      // 重新加载页面以更新主应用
+      window.location.reload()
+    } catch (err: any) {
+      console.error('❌ 全量同步失败:', err)
+      setError('同步失败：' + err.message)
+      alert('同步失败：' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  // ⭐ 从飞书批量导入日程（用于更换电脑或数据恢复）
+  const syncToCalendar = async () => {
+    if (events.length === 0) {
+      alert('没有可导入的日程')
+      return
+    }
+    
+    const confirmed = confirm(`确定要从飞书导入 ${events.length} 个日程到本地吗？\n\n注意：\n• 本地独有日程将保留\n• 飞书日程会覆盖本地相同日程\n• 适用于更换电脑或数据恢复场景`)
     if (!confirmed) return
     
     try {
@@ -314,7 +446,17 @@ export function FeishuTestPage(): JSX.Element {
       <div className="mb-6 grid grid-cols-2 gap-4">
         {/* 日历列表 */}
         <div className="p-4 bg-blue-50 rounded border border-blue-200">
-          <h2 className="text-lg font-semibold mb-3">📅 我的日历</h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-lg font-semibold">📅 我的日历</h2>
+            <button
+              onClick={() => handleFullSync(calendarId)}
+              disabled={isLoadingCalendars || !calendarId}
+              className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white text-sm rounded transition-colors"
+              title="从飞书全量下载该日历的所有日程到本地"
+            >
+              📥 从飞书同步
+            </button>
+          </div>
           
           {isLoadingCalendars ? (
             <div className="text-center py-4 text-gray-500">加载中...</div>
@@ -514,9 +656,9 @@ export function FeishuTestPage(): JSX.Element {
             onClick={syncToCalendar}
             disabled={events.length === 0}
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
-            title="将获取到的日程同步到本地日历"
+            title="从飞书批量导入日程（适用于更换电脑或数据恢复）"
           >
-            🔄 同步到日历
+            📥 从飞书导入
           </button>
         </div>
       </div>

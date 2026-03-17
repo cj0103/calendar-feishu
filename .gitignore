@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+dev.log
 
 # Dependencies
 node_modules
@@ -16,6 +17,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo
@@ -40,3 +42,9 @@ release/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Development scripts (optional)
+# start-dev.vbs
+# start-dev.ps1
+# start-dev-logging.vbs
+# 创建桌面快捷方式.bat
