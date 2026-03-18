@@ -56,7 +56,27 @@ contextBridge.exposeInMainWorld('api', {
     updateEvent: (calendarId: string, eventId: string, eventData: any) => 
       ipcRenderer.invoke('feishu:updateEvent', calendarId, eventId, eventData),
     deleteEvent: (calendarId: string, eventId: string) => 
-      ipcRenderer.invoke('feishu:deleteEvent', calendarId, eventId)
+      ipcRenderer.invoke('feishu:deleteEvent', calendarId, eventId),
+    // 配置管理相关方法
+    saveConfig: (config: { appId: string; appSecret: string; calendarId: string }) => 
+      ipcRenderer.invoke('feishu:saveConfig', config),
+    getConfig: () => ipcRenderer.invoke('feishu:getConfig'),
+    hasConfig: () => ipcRenderer.invoke('feishu:hasConfig'),
+    testConfig: (config: { appId: string; appSecret: string; calendarId: string }) => 
+      ipcRenderer.invoke('feishu:testConfig', config),
+    resetConfig: () => ipcRenderer.invoke('feishu:resetConfig'),
+    onNeedsConfig: (callback: () => void) => {
+      const channel = 'feishu:needsConfig'
+      ipcRenderer.on(channel, callback)
+      // 返回清理函数
+      return () => ipcRenderer.removeListener(channel, callback)
+    },
+    onConfigSaved: (callback: (config: any) => void) => {
+      const channel = 'feishu:configSaved'
+      ipcRenderer.on(channel, (_, config) => callback(config))
+      // 返回清理函数
+      return () => ipcRenderer.removeListener(channel, callback)
+    }
   },
   // 导出功能
   saveExportFile: (data: any, defaultPath: string) => 

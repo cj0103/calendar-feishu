@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { FeishuCalendar } from './types'
 
+interface FeishuTestPageProps {
+  onOpenConfig?: () => void
+}
+
 interface FeishuEvent {
   event_id: string
   summary: string
@@ -30,7 +34,7 @@ interface CreateCalendarFormData {
   summaryAlias: string
 }
 
-export function FeishuTestPage(): JSX.Element {
+export function FeishuTestPage({ onOpenConfig }: FeishuTestPageProps): JSX.Element {
   const [events, setEvents] = useState<FeishuEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +51,25 @@ export function FeishuTestPage(): JSX.Element {
     color: -1,
     summaryAlias: ''
   })
+  
+  // 配置状态
+  const [hasConfig, setHasConfig] = useState<boolean | null>(null)
+  
+  // 检查配置状态
+  useEffect(() => {
+    const checkConfig = async () => {
+      try {
+        if (window.api?.feishu) {
+          const result = await window.api.feishu.hasConfig()
+          setHasConfig(result)
+        }
+      } catch (error) {
+        console.error('检查配置失败:', error)
+        setHasConfig(false)
+      }
+    }
+    checkConfig()
+  }, [])
   
   // ⭐ 时间段选择（默认：过去 3 个月 + 未来 2 周）
   const getDefaultDateRange = () => {
@@ -440,7 +463,16 @@ export function FeishuTestPage(): JSX.Element {
 
   return (
     <div className="p-4" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <h1 className="text-2xl font-bold mb-4">飞书日历管理中心</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">飞书日历管理中心</h1>
+        <button
+          onClick={() => onOpenConfig?.()}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors flex items-center gap-2"
+          title="配置飞书凭证（App ID、App Secret、Calendar ID）"
+        >
+          ⚙️ 飞书配置
+        </button>
+      </div>
       
       {/* 日历管理区域 */}
       <div className="mb-6 grid grid-cols-2 gap-4">
@@ -448,14 +480,27 @@ export function FeishuTestPage(): JSX.Element {
         <div className="p-4 bg-blue-50 rounded border border-blue-200">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-semibold">📅 我的日历</h2>
-            <button
-              onClick={() => handleFullSync(calendarId)}
-              disabled={isLoadingCalendars || !calendarId}
-              className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white text-sm rounded transition-colors"
-              title="从飞书全量下载该日历的所有日程到本地"
-            >
-              📥 从飞书同步
-            </button>
+            <div className="flex items-center gap-2">
+              {hasConfig === false && (
+                <span className="text-xs text-red-500 flex items-center gap-1" title="未配置飞书凭证，点击配置">
+                  ⚠️ 未配置
+                  <button
+                    onClick={() => onOpenConfig?.()}
+                    className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded"
+                  >
+                    配置
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={() => handleFullSync(calendarId)}
+                disabled={isLoadingCalendars || !calendarId}
+                className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white text-sm rounded transition-colors"
+                title="从飞书全量下载该日历的所有日程到本地"
+              >
+                📥 从飞书同步
+              </button>
+            </div>
           </div>
           
           {isLoadingCalendars ? (

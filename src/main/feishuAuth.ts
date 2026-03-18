@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios'
 import CryptoJS from 'crypto-js'
 import { FEISHU_CONFIG } from './feishuConfig'
+import { configManager } from './configManager'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
@@ -17,11 +18,31 @@ class FeishuAuth {
   private readonly ENCRYPTION_KEY = 'feishu_calendar_secret_key_2024'
 
   /**
+   * 获取当前有效的配置（优先使用用户配置）
+   */
+  private async getEffectiveConfig() {
+    const userConfig = await configManager.loadUserConfig()
+    if (userConfig && userConfig.appId && userConfig.appId !== 'YOUR_APP_ID_HERE' && userConfig.appSecret) {
+      return {
+        appId: userConfig.appId,
+        appSecret: userConfig.appSecret,
+        calendarId: userConfig.calendarId
+      }
+    }
+    return {
+      appId: FEISHU_CONFIG.appId,
+      appSecret: FEISHU_CONFIG.appSecret,
+      calendarId: FEISHU_CONFIG.calendarId
+    }
+  }
+
+  /**
    * 获取授权 URL
    */
-  getAuthorizeUrl(): string {
+  async getAuthorizeUrl(): Promise<string> {
+    const config = await this.getEffectiveConfig()
     const params = new URLSearchParams({
-      app_id: FEISHU_CONFIG.appId,
+      app_id: config.appId,
       redirect_uri: FEISHU_CONFIG.redirectUri,
       state: this.generateState()
     })
@@ -32,6 +53,7 @@ class FeishuAuth {
    * 通过授权码获取 token
    */
   async getTokenByCode(code: string): Promise<TokenData> {
+    const config = await this.getEffectiveConfig()
     try {
       const response = await axios.post(
         `${FEISHU_CONFIG.apiBaseUrl}/authen/v1/access_token`,
@@ -44,8 +66,8 @@ class FeishuAuth {
             'Content-Type': 'application/json'
           },
           auth: {
-            username: FEISHU_CONFIG.appId,
-            password: FEISHU_CONFIG.appSecret
+            username: config.appId,
+            password: config.appSecret
           }
         }
       )
@@ -72,6 +94,7 @@ class FeishuAuth {
    * 刷新 token
    */
   async refreshToken(): Promise<TokenData> {
+    const config = await this.getEffectiveConfig()
     const savedToken = this.loadToken()
     if (!savedToken || !savedToken.refresh_token) {
       throw new Error('没有可用的 refresh token')
@@ -89,8 +112,8 @@ class FeishuAuth {
             'Content-Type': 'application/json'
           },
           auth: {
-            username: FEISHU_CONFIG.appId,
-            password: FEISHU_CONFIG.appSecret
+            username: config.appId,
+            password: config.appSecret
           }
         }
       )
@@ -118,12 +141,12 @@ class FeishuAuth {
    */
   async getTenantAccessToken(): Promise<{ tenant_access_token: string; expire: number }> {
     try {
-      console.log('[Auth] 请求 tenant_access_token, App ID:', FEISHU_CONFIG.appId)
+      const config = await this.getEffectiveConfig()
       const response = await axios.post(
         `${FEISHU_CONFIG.apiBaseUrl}/auth/v3/tenant_access_token/internal`,
         {
-          app_id: FEISHU_CONFIG.appId,
-          app_secret: FEISHU_CONFIG.appSecret
+          app_id: config.appId,
+          app_secret: config.appSecret
         },
         {
           headers: {

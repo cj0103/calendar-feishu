@@ -65,7 +65,31 @@ export class SyncManager {
   private syncToken: string | null = null
   private lastSyncTime: number | null = null
   private isSyncing: boolean = false
-  private calendarId: string
+  private calendarId: string | null = null
+
+  /**
+   * 获取当前配置的日历 ID
+   */
+  private async getCalendarId(): Promise<string> {
+    if (this.calendarId) {
+      return this.calendarId
+    }
+    
+    if (window.api?.feishu) {
+      try {
+        const config = await window.api.feishu.getConfig()
+        if (config?.calendarId) {
+          this.calendarId = config.calendarId
+          return this.calendarId
+        }
+      } catch (error) {
+        console.error('[SyncManager] 获取日历 ID 失败:', error)
+      }
+    }
+    
+    this.calendarId = FEISHU_CONFIG.calendarId
+    return this.calendarId
+  }
 
   /**
    * 执行同步任务（由队列调用）
@@ -74,6 +98,9 @@ export class SyncManager {
     console.log(`⏳ 执行同步任务：${task.action} - ${task.event.title}`)
     
     try {
+      // 动态获取日历 ID
+      const calendarId = await this.getCalendarId()
+      
       switch (task.action) {
         case 'create': {
           const startTimeStamp = toFeishuTimestamp(task.event.date, task.event.time)
@@ -99,7 +126,7 @@ export class SyncManager {
           }
           
           const result = await window.api.feishu.createEvent(
-            this.calendarId,
+            calendarId,
             feishuEventData
           )
 
@@ -153,7 +180,7 @@ export class SyncManager {
           }
           
           const result = await window.api.feishu.updateEvent(
-            this.calendarId,
+            calendarId,
             task.event.feishuEventId,
             updateData
           )
@@ -176,7 +203,7 @@ export class SyncManager {
           }
           
           await window.api.feishu.deleteEvent(
-            this.calendarId,
+            calendarId,
             task.event.feishuEventId
           )
           
@@ -198,8 +225,7 @@ export class SyncManager {
    * 创建同步管理器实例
    * @param calendarId 飞书日历 ID
    */
-  constructor(calendarId: string = FEISHU_CONFIG.calendarId) {
-    this.calendarId = calendarId
+  constructor() {
     this.initialize()
     
     // 设置队列任务执行器

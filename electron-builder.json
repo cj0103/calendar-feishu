@@ -5,7 +5,9 @@
     "buildResources": "build"
   },
   "files": [
-    "out/**/*"
+    "out/**/*",
+    "!**/feishu-user-config.json",
+    "!**/feishuConfig.ts"
   ],
   "win": {
     "target": [

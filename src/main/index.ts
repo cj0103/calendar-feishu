@@ -8,7 +8,8 @@ import { writeFileSync, readFileSync, existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { feishuAuth } from './feishuAuth'
 import { feishuCalendarAPI } from './feishuCalendar'
-import { FEISHU_CONFIG } from './feishuConfig'
+import { FEISHU_CONFIG, isDefaultConfig } from './feishuConfig'
+import { configManager } from './configManager'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -160,16 +161,22 @@ function createWindow(): void {
   console.log('Desktop calendar mode: alwaysOnBottom=true, type=toolbar, minimizable=false')
 
   console.log('Window will show in ready-to-show event')
-  mainWindow.on('ready-to-show', () => {
-    console.log('Window is ready to show, calling show()')
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    
-    mainWindow.show()
-    console.log('Window show() called, now calling focus()')
-    mainWindow.focus()
-    console.log('Window focus() called')
-    // 不再设置层级，避免窗口销毁
-  })
+  mainWindow.on('ready-to-show', async () => {
+      console.log('Window is ready to show')
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      
+      const userConfig = await configManager.loadUserConfig()
+      const needsConfig = !userConfig || !userConfig.appId || userConfig.appId === '' || userConfig.appId === 'YOUR_APP_ID_HERE' || !userConfig.appSecret
+      
+      console.log('User config status:', needsConfig ? '需要配置' : '已配置')
+      
+      if (needsConfig) {
+        mainWindow.webContents.send('feishu:needsConfig')
+      }
+      
+      mainWindow.show()
+      mainWindow.focus()
+    })
 
   mainWindow.on('show', () => {
     // 重新显示时确保在所有工作区可见
@@ -457,14 +464,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('feishu:getTenantAccessToken', async () => {
     try {
+      const userConfig = await configManager.loadUserConfig()
+      const appId = userConfig?.appId || FEISHU_CONFIG.appId
+      const appSecret = userConfig?.appSecret || FEISHU_CONFIG.appSecret
+      
       const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          app_id: FEISHU_CONFIG.appId,
-          app_secret: FEISHU_CONFIG.appSecret
+          app_id: appId,
+          app_secret: appSecret
         })
       })
       
@@ -568,10 +579,13 @@ app.whenReady().then(() => {
         response: error.response?.data,
         status: error.response?.status
       })
+      // 获取当前配置
+      const userConfig = await configManager.loadUserConfig()
+      const currentAppId = userConfig?.appId || FEISHU_CONFIG.appId
       return { 
         success: false, 
         error: error.message || '获取日历列表失败',
-        hint: `请检查：\n1. App ID 和 App Secret 是否正确（当前配置：${FEISHU_CONFIG.appId}）\n2. 应用是否已发布并启用\n3. 是否添加了"获取日历列表"相关权限\n4. 网络连接是否正常`
+        hint: `请检查：\n1. App ID 和 App Secret 是否正确（当前配置：${currentAppId}）\n2. 应用是否已发布并启用\n3. 是否添加了"获取日历列表"相关权限\n4. 网络连接是否正常`
       }
     }
   })
@@ -610,30 +624,79 @@ app.whenReady().then(() => {
     }
   })
 
+  // ========== 飞书配置管理 IPC 处理器 ==========
+  ipcMain.handle('feishu:saveConfig', async (_, config: { appId: string; appSecret: string; calendarId: string }) => {
+    const success = await configManager.saveUserConfig(config)
+    if (success && mainWindow) {
+      mainWindow.webContents.send('feishu:configSaved', config)
+    }
+    return { success }
+  })
+
+  ipcMain.handle('feishu:getConfig', async () => {
+    return configManager.getConfig()
+  })
+
+  ipcMain.handle('feishu:hasConfig', async () => {
+    return configManager.hasUserConfig()
+  })
+
+  ipcMain.handle('feishu:testConfig', async (_, config: { appId: string; appSecret: string; calendarId: string }) => {
+    try {
+      // 测试配置是否有效（调用飞书 API 验证）
+      const axios = require('axios')
+      
+      // 获取 tenant_access_token
+      const tokenResponse = await axios.post(
+        'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+        {
+          app_id: config.appId,
+          app_secret: config.appSecret
+        },
+        { timeout: FEISHU_CONFIG.timeout }
+      )
+      
+      if (tokenResponse.data.code !== 0) {
+        return { success: false, error: 'App ID 或 App Secret 错误' }
+      }
+      
+      return { success: true, message: '配置有效！' }
+    } catch (error: any) {
+      return { success: false, error: error.message || '测试失败' }
+    }
+  })
+
+  ipcMain.handle('feishu:resetConfig', async () => {
+    await configManager.deleteUserConfig()
+    return { success: true }
+  })
+
   ipcMain.handle('feishu:createEvent', async (_, calendarId: string, eventData: any) => {
     try {
       // 直接使用前端传来的数据，不需要转换
       const axios = require('axios')
       
-      // 获取 tenant_access_token
+      // 从 configManager 获取用户配置
+      const userConfig = await configManager.loadUserConfig()
+      const appId = userConfig?.appId || FEISHU_CONFIG.appId
+      const appSecret = userConfig?.appSecret || FEISHU_CONFIG.appSecret
+      
       const tokenResponse = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app_id: FEISHU_CONFIG.appId,
-          app_secret: FEISHU_CONFIG.appSecret
+          app_id: appId,
+          app_secret: appSecret
         })
       })
       
       const tokenData = await tokenResponse.json()
-      console.log('Token 响应:', tokenData)
       
       if (!tokenData || !tokenData.tenant_access_token) {
         throw new Error('获取 tenant_access_token 失败：' + (tokenData.msg || '未知错误'))
       }
       
       const tenantAccessToken = tokenData.tenant_access_token
-      console.log('获取到 tenant_access_token:', tenantAccessToken.substring(0, 20) + '...')
 
       console.log('========== 创建日程请求 ==========')
       console.log('日历 ID:', calendarId)
@@ -700,12 +763,20 @@ app.whenReady().then(() => {
     try {
       // 直接使用前端传来的数据，不需要转换
       const axios = require('axios')
+      
+      // 从 configManager 获取用户配置
+      const userConfig = await configManager.loadUserConfig()
+      const appId = userConfig?.appId || FEISHU_CONFIG.appId
+      const appSecret = userConfig?.appSecret || FEISHU_CONFIG.appSecret
+      
+      console.log('[UpdateEvent] 使用配置 - App ID:', appId)
+      
       const tenantAccessToken = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app_id: FEISHU_CONFIG.appId,
-          app_secret: FEISHU_CONFIG.appSecret
+          app_id: appId,
+          app_secret: appSecret
         })
       }).then(res => res.json()).then(data => data.tenant_access_token)
 

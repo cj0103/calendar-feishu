@@ -33,6 +33,10 @@ dist-ssr
 
 # Feishu config with credentials
 src/main/feishuConfig.ts
+feishu-user-config.json
+
+# User data directory
+**/feishu-user-config.json
 
 # Build output
 out/

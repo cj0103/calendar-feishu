@@ -6,6 +6,7 @@ import EventFormModal from './EventFormModal'
 import { SyncManager, SyncStatus } from './sync/SyncManager'
 import { FEISHU_CONFIG } from '../../main/feishuConfig'
 import { FeishuTestPage } from './FeishuTestPage'
+import { FeishuConfigWizard } from './components/FeishuConfigWizard'
 import { applyOpacity } from './utils/colorUtils'
 import { holidayManager, DayType } from './utils/holidayManager'
 import { getLunarDateCached } from './utils/lunarUtils'
@@ -54,6 +55,10 @@ interface CalendarDayInfo {
  */
 function App(): JSX.Element {
   const today = new Date()
+  // 是否需要配置飞书（首次启动）- 仅显示提示条，不再强制弹窗
+  const [needsConfig, setNeedsConfig] = useState(false)
+  // 是否显示配置向导（用户主动打开）
+  const [showConfigWizard, setShowConfigWizard] = useState(false)
   // 日历基准日期（用于计算日历显示范围）
   const [calendarBaseDate, setCalendarBaseDate] = useState(new Date())
   // 本地日程列表
@@ -76,10 +81,12 @@ function App(): JSX.Element {
   const [mouseIgnore, setMouseIgnore] = useState(false)
   // 飞书同步状态
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ syncing: false, lastSyncTime: null, error: null })
-  // 飞书同步管理器（使用配置的日历 ID）
-  const [syncManager] = useState(() => new SyncManager(FEISHU_CONFIG.calendarId))
+  // 飞书同步管理器（日历 ID 会在同步时动态获取）
+  const [syncManager] = useState(() => new SyncManager())
   // 是否显示飞书测试页面
   const [showTestPage, setShowTestPage] = useState(false)
+  // 配置管理 - 打开配置向导的函数
+  const openConfigWizard = () => setShowConfigWizard(true)
   // 窗口设置（透明度、大小、位置、颜色等）
   const [settings, setSettings] = useState<Settings>({
     windowOpacity: 100,
@@ -102,6 +109,40 @@ function App(): JSX.Element {
     holidayManager.loadData().catch(err => {
       console.error('Failed to load holiday data:', err)
     })
+    
+    // 检查是否需要配置飞书
+    const checkConfig = async () => {
+      try {
+        // 确保 window.api.feishu 存在
+        if (!window.api?.feishu) {
+          console.warn('window.api.feishu 不存在，跳过配置检查')
+          return
+        }
+        
+        const hasConfig = await window.api.feishu.hasConfig()
+        console.log('飞书配置检查:', hasConfig ? '已配置' : '需要配置')
+        if (!hasConfig) {
+          setNeedsConfig(true)
+        }
+      } catch (error) {
+        console.error('检查飞书配置失败:', error)
+      }
+    }
+    
+    checkConfig()
+    
+    // 监听配置需求通知（从主进程）
+    if (window.api?.feishu?.onNeedsConfig) {
+      const unsubscribe = window.api.feishu.onNeedsConfig(() => {
+        console.log('收到配置需求通知')
+        setNeedsConfig(true)
+      })
+      
+      return () => {
+        // 清理事件监听
+        unsubscribe?.()
+      }
+    }
   }, [])
 
   // 加载本地存储的日程信息
@@ -668,6 +709,41 @@ function App(): JSX.Element {
       }}
       onMouseMove={handleMouseMove}
     >
+      {/* 飞书配置提示条（仅当需要配置时显示，放在飞书日历管理中心按钮旁） */}
+      {needsConfig && !showConfigWizard && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-2 pr-3 rounded shadow-lg flex items-center gap-2 whitespace-nowrap">
+            <span className="text-yellow-700 text-xs">⚠️ 飞书配置未设置</span>
+            <button
+              onClick={() => setShowTestPage(true)}
+              className="text-yellow-700 hover:text-yellow-900 text-xs underline"
+            >
+              去配置
+            </button>
+            <button
+              onClick={() => setNeedsConfig(false)}
+              className="text-yellow-500 hover:text-yellow-700 text-sm"
+              title="关闭提示"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 飞书配置向导（用户主动打开时显示） */}
+      {showConfigWizard && (
+        <FeishuConfigWizard 
+          onComplete={() => {
+            setShowConfigWizard(false)
+            setNeedsConfig(false)
+            // 配置完成后刷新页面
+            window.location.reload()
+          }}
+          onClose={() => setShowConfigWizard(false)}
+        />
+      )}
+      
       <div 
         className="absolute inset-0"
         style={{ 
@@ -977,7 +1053,7 @@ function App(): JSX.Element {
               >
                 ✕
               </button>
-              <FeishuTestPage />
+              <FeishuTestPage onOpenConfig={openConfigWizard} />
             </div>
           </div>
         </div>
