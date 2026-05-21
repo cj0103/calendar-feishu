@@ -89,7 +89,7 @@ export function LongTermRemindersPanel({ reminders, onSaveReminders, settings }:
     switch (importance) {
       case 'high': return '#991b1b'
       case 'medium': return '#9a3412'
-      default: return settings.calendarColor || '#1f2937'
+      default: return '#1f2937'
     }
   }
 
