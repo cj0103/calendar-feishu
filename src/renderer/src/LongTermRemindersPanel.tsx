@@ -79,9 +79,9 @@ export function LongTermRemindersPanel({ reminders, onSaveReminders, settings }:
 
   const getImportanceColor = (importance: string) => {
     switch (importance) {
-      case 'high': return applyOpacity('#fecaca', settings.windowOpacity)
-      case 'medium': return applyOpacity('#fed7aa', settings.windowOpacity)
-      default: return applyOpacity('#f3f4f6', settings.windowOpacity)
+      case 'high': return '#fecaca'
+      case 'medium': return '#fed7aa'
+      default: return '#f3f4f6'
     }
   }
 
