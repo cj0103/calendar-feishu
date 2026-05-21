@@ -165,3 +165,19 @@ export interface ExportData {
   exportInfo: ExportInfo
   events: ExportEvent[]
 }
+
+export interface LongTermReminder {
+  id: string
+  title: string
+  description?: string
+  importance: 'low' | 'medium' | 'high'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Contact {
+  id: string
+  name: string
+  phone: string
+  createdAt: string
+}

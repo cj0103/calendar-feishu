@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { CalendarEvent, CalendarDayInfo, Settings } from '../types'
+import { CalendarEvent, CalendarDayInfo, Settings, LongTermReminder, Contact } from '../types'
 import SettingsModal from './SettingsModal'
 import ImportExportModal from './ImportExportModal'
 import EventFormModal from './EventFormModal'
+import { LongTermRemindersPanel } from './LongTermRemindersPanel'
+import { ContactsModal } from './ContactsModal'
 import { SyncManager, SyncStatus } from './sync/SyncManager'
 import { FEISHU_CONFIG } from '../../main/feishuConfig'
 import { FeishuTestPage } from './FeishuTestPage'
@@ -103,6 +105,12 @@ function App(): JSX.Element {
   })
   // 导入导出功能（统一弹窗）
   const [isImportExportOpen, setIsImportExportOpen] = useState(false)
+  // 长期提醒事项
+  const [longTermReminders, setLongTermReminders] = useState<LongTermReminder[]>([])
+  // 通讯录
+  const [contacts, setContacts] = useState<Contact[]>([])
+  // 通讯录弹窗
+  const [isContactsOpen, setIsContactsOpen] = useState(false)
 
   // 加载节假日数据（应用启动时）
   useEffect(() => {
@@ -154,6 +162,32 @@ function App(): JSX.Element {
         setEvents(parsed)
       } catch (e) {
         console.error('加载日程信息失败:', e)
+      }
+    }
+  }, [])
+
+  // 加载长期提醒事项
+  useEffect(() => {
+    const savedReminders = localStorage.getItem('calendar-long-term-reminders')
+    if (savedReminders) {
+      try {
+        const parsed = JSON.parse(savedReminders)
+        setLongTermReminders(parsed)
+      } catch (e) {
+        console.error('加载长期提醒事项失败:', e)
+      }
+    }
+  }, [])
+
+  // 加载通讯录
+  useEffect(() => {
+    const savedContacts = localStorage.getItem('calendar-contacts')
+    if (savedContacts) {
+      try {
+        const parsed = JSON.parse(savedContacts)
+        setContacts(parsed)
+      } catch (e) {
+        console.error('加载通讯录失败:', e)
       }
     }
   }, [])
@@ -338,6 +372,24 @@ function App(): JSX.Element {
       localStorage.setItem('calendar-events', JSON.stringify(eventsToSave))
     } catch (e) {
       console.error('保存日程信息失败:', e)
+    }
+  }
+
+  const saveLongTermReminders = (reminders: LongTermReminder[]) => {
+    setLongTermReminders(reminders)
+    try {
+      localStorage.setItem('calendar-long-term-reminders', JSON.stringify(reminders))
+    } catch (e) {
+      console.error('保存长期提醒事项失败:', e)
+    }
+  }
+
+  const saveContacts = (newContacts: Contact[]) => {
+    setContacts(newContacts)
+    try {
+      localStorage.setItem('calendar-contacts', JSON.stringify(newContacts))
+    } catch (e) {
+      console.error('保存通讯录失败:', e)
     }
   }
 
@@ -526,35 +578,28 @@ function App(): JSX.Element {
   }
 
   const getCalendarDays = (year: number, month: number): CalendarDayInfo[] => {
-    // 使用 calendarBaseDate 计算日历显示范围
     const baseDate = calendarBaseDate
     
-    // 1. 计算 baseDate 所在的周的周一
     const baseDateDayOfWeek = baseDate.getDay()
     const adjustedDayOfWeek = baseDateDayOfWeek === 0 ? 6 : baseDateDayOfWeek - 1
     
-    // 2. baseDate 所在周的周一
     const thisWeekMonday = new Date(baseDate)
     thisWeekMonday.setDate(baseDate.getDate() - adjustedDayOfWeek)
     
-    // 3. 上周的周一（日历起始日期）
     const calendarStartDate = new Date(thisWeekMonday)
     calendarStartDate.setDate(thisWeekMonday.getDate() - 7)
     
-    // 4. 生成 35 天（5 周）
     const days: CalendarDayInfo[] = []
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 28; i++) {
       const currentDay = new Date(calendarStartDate)
       currentDay.setDate(calendarStartDate.getDate() + i)
       const dayOfWeek = currentDay.getDay()
 
-      // 修复时区问题：使用本地时间格式化，而不是 toISOString()
       const currentYear = currentDay.getFullYear()
       const currentMonth = String(currentDay.getMonth() + 1).padStart(2, '0')
       const currentDayStr = String(currentDay.getDate()).padStart(2, '0')
       const dateStr = `${currentYear}-${currentMonth}-${currentDayStr}`
       
-      // 获取农历信息
       const lunarInfo = getLunarDateCached(currentDay)
 
       days.push({
@@ -810,6 +855,13 @@ function App(): JSX.Element {
           >
             📁
           </button>
+          <button 
+            onClick={() => setIsContactsOpen(true)}
+            className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded text-blue-600"
+            title="通讯录"
+          >
+            📇
+          </button>
         </div>
       </div>
 
@@ -866,7 +918,7 @@ function App(): JSX.Element {
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1 flex-1 min-h-[500px] auto-rows-fr">
+        <div className="grid grid-cols-7 gap-1 flex-1 min-h-[560px] auto-rows-fr">
           {calendarDays.map((dayInfo, index) => {
             const dayEvents = getEventsForDay(dayInfo.date)
             const isToday = dayInfo.date === getTodayDateStr()
@@ -879,17 +931,15 @@ function App(): JSX.Element {
             let dayMark: string | null = null
             
             if (dayType.isWorkday) {
-              // 调休工作日（周末但要上班）- 使用工作日背景
               backgroundColor = applyOpacity(settings.workdayColor, settings.windowOpacity)
               dayMark = '班'
             } else if (dayType.isHoliday) {
-              // 法定节假日（工作日但要休息）- 使用周末背景
               backgroundColor = applyOpacity(settings.weekendColor, settings.windowOpacity)
               dayMark = '休'
-            } else if (!dayInfo.isCurrentMonth) {
-              backgroundColor = applyOpacity(settings.otherMonthColor, settings.windowOpacity)
             } else if (dayInfo.isWeekend) {
               backgroundColor = applyOpacity(settings.weekendColor, settings.windowOpacity)
+            } else if (!dayInfo.isCurrentMonth) {
+              backgroundColor = applyOpacity(settings.otherMonthColor, settings.windowOpacity)
             } else {
               backgroundColor = applyOpacity(settings.workdayColor, settings.windowOpacity)
             }
@@ -976,6 +1026,12 @@ function App(): JSX.Element {
             )
           })}
         </div>
+
+        <LongTermRemindersPanel
+          reminders={longTermReminders}
+          onSaveReminders={saveLongTermReminders}
+          settings={settings}
+        />
       </div>
       </div>
 
@@ -1001,6 +1057,13 @@ function App(): JSX.Element {
         onSave={handleEventSave}
         initialDate={selectedDate}
         editingEvent={editingEvent}
+      />
+
+      <ContactsModal
+        isOpen={isContactsOpen}
+        onClose={() => setIsContactsOpen(false)}
+        contacts={contacts}
+        onSaveContacts={saveContacts}
       />
 
       {contextMenu && (
