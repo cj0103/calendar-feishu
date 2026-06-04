@@ -17,6 +17,7 @@ interface EventFormModalProps {
   initialDate: string
   editingEvent?: CalendarEvent | null
   syncToFeishu?: boolean  // 是否同步到飞书
+  events?: CalendarEvent[]  // 所有日程列表，用于检查标题重复
 }
 
 export default function EventFormModal({
@@ -25,7 +26,8 @@ export default function EventFormModal({
   onSave,
   initialDate,
   editingEvent,
-  syncToFeishu = false  // 默认不同步到飞书
+  syncToFeishu = false,  // 默认不同步到飞书
+  events = []  // 默认空数组
 }: EventFormModalProps): JSX.Element | null {
   const [formData, setFormData] = useState<EventFormData>({
     date: initialDate,
@@ -123,6 +125,18 @@ export default function EventFormModal({
     
     if (!formData.title.trim()) {
       newErrors.title = '标题不能为空'
+    }
+    
+    // 检查同一天内是否有重复标题（编辑模式排除当前日程本身）
+    if (!newErrors.title) {
+      const isDuplicate = events.some(event => {
+        if (editingEvent && event.id === editingEvent.id) return false
+        return event.date === formData.date && event.title.trim() === formData.title.trim()
+      })
+      
+      if (isDuplicate) {
+        newErrors.title = '当天已存在相同标题的日程'
+      }
     }
     
     if (Object.keys(newErrors).length > 0) {

@@ -560,16 +560,16 @@ function App(): JSX.Element {
     return `${year}-${month}-${day}`
   }
 
-  // 月份切换处理函数
+  // 月份切换处理函数（按4周翻页，确保与28天显示范围一致）
   const handlePrevMonth = () => {
     const newBaseDate = new Date(calendarBaseDate)
-    newBaseDate.setMonth(newBaseDate.getMonth() - 1)
+    newBaseDate.setDate(newBaseDate.getDate() - 28)
     setCalendarBaseDate(newBaseDate)
   }
 
   const handleNextMonth = () => {
     const newBaseDate = new Date(calendarBaseDate)
-    newBaseDate.setMonth(newBaseDate.getMonth() + 1)
+    newBaseDate.setDate(newBaseDate.getDate() + 28)
     setCalendarBaseDate(newBaseDate)
   }
 
@@ -677,16 +677,10 @@ function App(): JSX.Element {
             })
         }, 0)
       } else {
-        // 无飞书 ID → 创建飞书日程
-        setTimeout(() => {
-          syncManager.syncCreateToFeishu(eventData)
-            .then(success => {
-              // 静默处理，不输出日志
-            })
-        }, 0)
+        // 无飞书 ID → 创建飞书日程（由 SyncManager.initialize 自动处理）
       }
     } else {
-      // ⭐ 新建模式：创建本地数据和飞书日程
+      // ⭐ 新建模式：创建本地数据
       const newEvent: CalendarEvent = {
         ...eventData,
         id: Date.now().toString()
@@ -696,13 +690,7 @@ function App(): JSX.Element {
       setEvents(updated)
       saveEventsToLocalStorage(updated)
       
-      // 异步创建到飞书
-      setTimeout(() => {
-        syncManager.syncCreateToFeishu(newEvent)
-          .then(success => {
-            // 静默处理，不输出日志
-          })
-      }, 0)
+      // 新建日程由 SyncManager.initialize() 自动扫描无 feishuEventId 的事件同步
     }
     
     // 关闭表单
@@ -1057,6 +1045,7 @@ function App(): JSX.Element {
         onSave={handleEventSave}
         initialDate={selectedDate}
         editingEvent={editingEvent}
+        events={events}
       />
 
       <ContactsModal

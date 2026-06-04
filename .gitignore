@@ -52,3 +52,6 @@ release/
 # start-dev.ps1
 # start-dev-logging.vbs
 # 创建桌面快捷方式.bat
+
+# Trae AI documents
+.trae/
