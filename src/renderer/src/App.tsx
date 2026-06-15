@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { CalendarEvent, CalendarDayInfo, Settings, LongTermReminder, Contact } from '../types'
+import { CalendarEvent, CalendarDayInfo, Settings, LongTermReminder, Contact, StickyNote } from '../types'
 import SettingsModal from './SettingsModal'
 import ImportExportModal from './ImportExportModal'
 import EventFormModal from './EventFormModal'
@@ -111,6 +111,8 @@ function App(): JSX.Element {
   const [contacts, setContacts] = useState<Contact[]>([])
   // 通讯录弹窗
   const [isContactsOpen, setIsContactsOpen] = useState(false)
+  // 便签
+  const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([])
 
   // 加载节假日数据（应用启动时）
   useEffect(() => {
@@ -188,6 +190,19 @@ function App(): JSX.Element {
         setContacts(parsed)
       } catch (e) {
         console.error('加载通讯录失败:', e)
+      }
+    }
+  }, [])
+
+  // 加载便签
+  useEffect(() => {
+    const savedNotes = localStorage.getItem('calendar-sticky-notes')
+    if (savedNotes) {
+      try {
+        const parsed = JSON.parse(savedNotes)
+        setStickyNotes(parsed)
+      } catch (e) {
+        console.error('加载便签失败:', e)
       }
     }
   }, [])
@@ -295,9 +310,12 @@ function App(): JSX.Element {
     })
 
     // 2. 导入工具函数
-    const { extractAttachments } = await import('./utils/exportUtils')
+    const { extractAttachments, exportStickyNotes } = await import('./utils/exportUtils')
 
-    // 3. 构建导出数据（精简格式）
+    // 3. 导出便签（完成时间在导出时段内的）
+    const exportedStickyNotes = exportStickyNotes(stickyNotes, startDate, endDate)
+
+    // 4. 构建导出数据（精简格式）
     const exportData = {
       exportInfo: {
         exportedAt: new Date().toISOString(),
@@ -335,19 +353,22 @@ function App(): JSX.Element {
             feishuEventId: event.feishuEventId
           }
         }
-      })
+      }),
+      stickyNotes: exportedStickyNotes
     }
 
-    // 4. 调用 IPC 保存文件
+    // 5. 调用 IPC 保存文件
     const defaultFileName = `calendar-export-${startDate}-${endDate}.json`
     const result = await window.api.saveExportFile(exportData, defaultFileName)
 
     if (result.success) {
-      alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程\n包含 ${exportData.exportInfo.withAttachments} 个带附件的日程\n文件：${result.filePath}`)
+      const stickyNoteCount = exportedStickyNotes.length
+      const stickyNoteMsg = stickyNoteCount > 0 ? `\n包含 ${stickyNoteCount} 个已完成的便签` : ''
+      alert(`导出成功！\n共导出 ${filteredEvents.length} 个日程${stickyNoteMsg}\n包含 ${exportData.exportInfo.withAttachments} 个带附件的日程\n文件：${result.filePath}`)
     } else if (!result.canceled) {
       alert('导出失败：' + result.error)
     }
-  }, [events])
+  }, [events, stickyNotes])
 
   // 导入功能
   const handleImport = useCallback((newEvents: CalendarEvent[], syncToFeishu: boolean) => {
@@ -390,6 +411,15 @@ function App(): JSX.Element {
       localStorage.setItem('calendar-contacts', JSON.stringify(newContacts))
     } catch (e) {
       console.error('保存通讯录失败:', e)
+    }
+  }
+
+  const saveStickyNotes = (notes: StickyNote[]) => {
+    setStickyNotes(notes)
+    try {
+      localStorage.setItem('calendar-sticky-notes', JSON.stringify(notes))
+    } catch (e) {
+      console.error('保存便签失败:', e)
     }
   }
 
@@ -1018,6 +1048,8 @@ function App(): JSX.Element {
         <LongTermRemindersPanel
           reminders={longTermReminders}
           onSaveReminders={saveLongTermReminders}
+          stickyNotes={stickyNotes}
+          onSaveStickyNotes={saveStickyNotes}
           settings={settings}
         />
       </div>

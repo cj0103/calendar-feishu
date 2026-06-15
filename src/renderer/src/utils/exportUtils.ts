@@ -165,3 +165,36 @@ export function countAttachmentTypes(attachments: Attachment[]): Record<Attachme
   
   return counts
 }
+
+/**
+ * 导出便签数据
+ * @param stickyNotes 便签列表
+ * @param startDate 导出开始日期
+ * @param endDate 导出结束日期
+ * @returns 符合条件的便签（完成时间在导出时段内的）
+ */
+export function exportStickyNotes(
+  stickyNotes: any[],
+  startDate: string,
+  endDate: string
+): any[] {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  
+  return stickyNotes
+    .filter(note => {
+      // 只导出已完成的便签
+      if (!note.completedAt) return false
+      
+      const completedDate = new Date(note.completedAt)
+      // 检查完成时间是否在导出时段内
+      return completedDate >= start && completedDate <= end
+    })
+    .map(note => ({
+      id: note.id,
+      title: note.title,
+      importance: note.importance,
+      createdAt: note.createdAt,
+      completedAt: note.completedAt
+    }))
+}

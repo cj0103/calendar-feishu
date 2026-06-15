@@ -164,6 +164,18 @@ export interface ExportInfo {
 export interface ExportData {
   exportInfo: ExportInfo
   events: ExportEvent[]
+  stickyNotes?: StickyNoteExport[]
+}
+
+/**
+ * 导出便签字段
+ */
+export interface StickyNoteExport {
+  id: string
+  title: string
+  importance: 'low' | 'medium' | 'high'
+  createdAt: string
+  completedAt: string
 }
 
 export interface LongTermReminder {
@@ -180,4 +192,12 @@ export interface Contact {
   name: string
   phone: string
   createdAt: string
+}
+
+export interface StickyNote {
+  id: string
+  title: string
+  importance: 'low' | 'medium' | 'high'
+  createdAt: string      // 添加时间
+  completedAt?: string   // 完成时间（可选）
 }
