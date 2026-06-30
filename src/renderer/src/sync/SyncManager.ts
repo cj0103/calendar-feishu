@@ -66,6 +66,9 @@ export class SyncManager {
   private lastSyncTime: number | null = null
   private isSyncing: boolean = false
   private calendarId: string | null = null
+  private syncTimer: ReturnType<typeof setInterval> | null = null
+  private syncTimeHour: number = 12
+  private syncTimeMinute: number = 0
 
   /**
    * 获取当前配置的日历 ID
@@ -226,7 +229,7 @@ export class SyncManager {
    * @param calendarId 飞书日历 ID
    */
   constructor() {
-    this.initialize()
+    // 不在构造函数中自动初始化，由 App.tsx 控制初始化时机
     
     // 设置队列任务执行器
     syncQueue.setTaskExecutor(async (task) => {
@@ -248,8 +251,17 @@ export class SyncManager {
     const localEvents = this.loadEventsFromLocalStorage()
     const localOnlyEvents = localEvents.filter(e => !e.feishuEventId)
     
+    // ⭐ 关键修复：加入队列前检查是否已在队列中，避免重复创建
+    const existingTasks = syncQueue.getAll()
     for (const event of localOnlyEvents) {
-      syncQueue.add(event, 'create')
+      const alreadyInQueue = existingTasks.some(task => 
+        task.eventId === event.id && task.action === 'create'
+      )
+      if (!alreadyInQueue) {
+        syncQueue.add(event, 'create')
+      } else {
+        console.log(`⏭️ 事件已在队列中，跳过：${event.title}`)
+      }
     }
     
     console.log(`📝 启动时添加了 ${localOnlyEvents.length} 个本地独有事件到队列`)
@@ -267,12 +279,13 @@ export class SyncManager {
     this.isSyncing = true
     
     try {
-      // 只处理队列，不再从飞书同步
       const queueStats = syncQueue.getStats()
       
       console.log(`📝 当前队列：${queueStats.total} 个任务`)
       
-      // 队列会自动处理，这里只返回统计
+      // ⭐ 关键修复：手动触发队列处理
+      await syncQueue.processQueue()
+      
       return {
         added: 0,
         updated: 0,
@@ -392,6 +405,83 @@ export class SyncManager {
    */
   getPendingQueueStats() {
     return syncQueue.getStats()
+  }
+
+  /**
+   * 设置定时同步时间
+   * @param hour 小时（0-23）
+   * @param minute 分钟（0-59）
+   */
+  setSyncTime(hour: number, minute: number): void {
+    this.syncTimeHour = hour
+    this.syncTimeMinute = minute
+    this.scheduleSync()
+    console.log(`⏰ 定时同步已设置为每天 ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`)
+  }
+
+  /**
+   * 启动定时同步
+   * 每分钟检查一次是否到达同步时间
+   */
+  private scheduleSync(): void {
+    // 清除旧的定时器
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer)
+    }
+
+    // 每分钟检查一次
+    this.syncTimer = setInterval(() => {
+      const now = new Date()
+      const currentHour = now.getHours()
+      const currentMinute = now.getMinutes()
+
+      // 检查是否到达同步时间（只在分钟匹配时触发，避免一分钟内多次触发）
+      if (currentHour === this.syncTimeHour && currentMinute === this.syncTimeMinute) {
+        // 检查今天是否已经同步过
+        const lastSync = this.lastSyncTime ? new Date(this.lastSyncTime) : null
+        const today = new Date()
+        
+        if (!lastSync || 
+            lastSync.getDate() !== today.getDate() ||
+            lastSync.getMonth() !== today.getMonth() ||
+            lastSync.getFullYear() !== today.getFullYear()) {
+          console.log(` 定时同步触发：${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`)
+          this.sync()
+        }
+      }
+    }, 60000) // 每分钟检查一次
+
+    console.log(`⏰ 定时同步已启动，目标时间：${this.syncTimeHour.toString().padStart(2, '0')}:${this.syncTimeMinute.toString().padStart(2, '0')}`)
+  }
+
+  /**
+   * 停止定时同步
+   */
+  stopScheduledSync(): void {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer)
+      this.syncTimer = null
+      console.log('⏰ 定时同步已停止')
+    }
+  }
+
+  /**
+   * 获取定时同步状态
+   */
+  getScheduledSyncStatus(): { enabled: boolean; nextSyncTime: string } {
+    const now = new Date()
+    const nextSync = new Date(now)
+    nextSync.setHours(this.syncTimeHour, this.syncTimeMinute, 0, 0)
+    
+    // 如果今天的同步时间已过，设置为明天
+    if (nextSync <= now) {
+      nextSync.setDate(nextSync.getDate() + 1)
+    }
+
+    return {
+      enabled: this.syncTimer !== null,
+      nextSyncTime: `${nextSync.getMonth() + 1}/${nextSync.getDate()} ${nextSync.getHours().toString().padStart(2, '0')}:${nextSync.getMinutes().toString().padStart(2, '0')}`
+    }
   }
 
   /**

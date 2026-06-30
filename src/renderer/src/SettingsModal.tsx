@@ -16,9 +16,16 @@ export default function SettingsModal({
 }: SettingsModalProps): JSX.Element | null {
   const [localSettings, setLocalSettings] = useState<Settings>(settings)
   const [activeTab, setActiveTab] = useState<'appearance' | 'text' | 'window'>('appearance')
+  const [syncTimeHour, setSyncTimeHour] = useState(12)
+  const [syncTimeMinute, setSyncTimeMinute] = useState(0)
 
   useEffect(() => {
     if (isOpen) {
+      // 解析同步时间
+      const syncTime = settings.syncTime || '12:00'
+      const [h, m] = syncTime.split(':').map(Number)
+      setSyncTimeHour(h || 12)
+      setSyncTimeMinute(m || 0)
       // 读取自启动状态
       const loadAutoLaunchSettings = async () => {
         try {
@@ -63,7 +70,10 @@ export default function SettingsModal({
   }, [isOpen, settings])
 
   const handleSave = (): void => {
-    onSaveSettings(localSettings)
+    // 保存同步时间设置
+    const syncTime = `${syncTimeHour.toString().padStart(2, '0')}:${syncTimeMinute.toString().padStart(2, '0')}`
+    const finalSettings = { ...localSettings, syncTime }
+    onSaveSettings(finalSettings)
     onClose()
   }
 
@@ -630,6 +640,58 @@ export default function SettingsModal({
                       </div>
                     </label>
                   )}
+                </div>
+              </div>
+
+              {/* 定时同步设置 */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">定时同步设置</h3>
+                
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-sm font-medium text-gray-900 mb-2">每天自动同步时间</div>
+                    <div className="text-xs text-gray-500 mb-3">
+                      设置每天自动将本地日程同步到飞书的时间
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-gray-600">时:</label>
+                        <select
+                          value={syncTimeHour}
+                          onChange={(e) => setSyncTimeHour(parseInt(e.target.value))}
+                          className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={`h-${i}`} value={i}>
+                              {i.toString().padStart(2, '0')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <span className="text-gray-600 font-medium">:</span>
+                      
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-gray-600">分:</label>
+                        <select
+                          value={syncTimeMinute}
+                          onChange={(e) => setSyncTimeMinute(parseInt(e.target.value))}
+                          className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {Array.from({ length: 60 }, (_, i) => (
+                            <option key={`m-${i}`} value={i}>
+                              {i.toString().padStart(2, '0')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 text-xs text-blue-600">
+                      当前设置：每天 {syncTimeHour.toString().padStart(2, '0')}:{syncTimeMinute.toString().padStart(2, '0')} 自动同步
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

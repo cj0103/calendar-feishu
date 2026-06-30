@@ -102,6 +102,9 @@ export interface Settings {
   // 开机自启动设置
   autoLaunch?: boolean         // 是否开机自启动
   launchHidden?: boolean       // 自启动时是否隐藏窗口
+  
+  // 同步设置
+  syncTime?: string            // 定时同步时间（格式 "HH:MM"，默认 "12:00"）
 }
 
 /**

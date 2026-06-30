@@ -36,7 +36,7 @@ interface SyncQueueConfig {
 const DEFAULT_CONFIG: SyncQueueConfig = {
   maxRetries: 3,
   retryDelay: 5000,
-  mergeWindow: 1000,
+  mergeWindow: 5000,     // 扩大到 5 秒，避免短时间内重复添加
   processDelay: 100
 }
 
@@ -99,10 +99,17 @@ export class SyncQueueManager {
     if (existingIndex !== -1) {
       const existingTask = this.queue[existingIndex]
 
-      // 检查时间窗口（1 秒内的更新才合并）
+      // 同一事件同一操作 → 直接替换为最新版本（无论时间窗口）
+      if (existingTask.action === action) {
+        console.log(`🔄 合并重复任务：${event.id} (${action})`)
+        this.queue[existingIndex] = task
+        this.saveToStorage()
+        return
+      }
+
+      // 不同操作 → 检查时间窗口（5 秒内的更新才合并）
       if (task.timestamp - existingTask.timestamp < this.config.mergeWindow) {
-        console.log(`🔄 合并重复任务：${event.id} (${existingTask.action} → ${action})`)
-        // 替换为最新版本
+        console.log(`🔄 合并跨操作任务：${event.id} (${existingTask.action} → ${action})`)
         this.queue[existingIndex] = task
         this.saveToStorage()
         return
@@ -113,9 +120,7 @@ export class SyncQueueManager {
     this.insertByPriority(task)
     this.saveToStorage()
     console.log(`📝 添加到同步队列：${action} - ${event.title} (优先级：${task.priority})`)
-
-    // 触发处理
-    this.processQueue()
+    //  不再自动处理，等待手动同步或定时同步时处理
   }
 
   /**

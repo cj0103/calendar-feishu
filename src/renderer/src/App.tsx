@@ -85,6 +85,8 @@ function App(): JSX.Element {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ syncing: false, lastSyncTime: null, error: null })
   // 飞书同步管理器（日历 ID 会在同步时动态获取）
   const [syncManager] = useState(() => new SyncManager())
+  // 同步管理器是否已初始化
+  const [syncInitialized, setSyncInitialized] = useState(false)
   // 是否显示飞书测试页面
   const [showTestPage, setShowTestPage] = useState(false)
   // 配置管理 - 打开配置向导的函数
@@ -232,7 +234,8 @@ function App(): JSX.Element {
           todayButtonColor: parsed.todayButtonColor || '#ffffff',
           todayButtonBgColor: parsed.todayButtonBgColor || '#2563eb',
           weekDayTextColor: parsed.weekDayTextColor || '#6b7280',
-          weekDayTextSize: parsed.weekDayTextSize ?? 12
+          weekDayTextSize: parsed.weekDayTextSize ?? 12,
+          syncTime: parsed.syncTime || '12:00'
         })
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -295,9 +298,32 @@ function App(): JSX.Element {
     }
   }, [])
 
+  // 初始化同步管理器并设置定时同步
+  useEffect(() => {
+    if (!syncInitialized && settings.syncTime) {
+      // 初始化同步管理器（扫描本地未同步事件）
+      syncManager.initialize().then(() => {
+        console.log('✅ 同步管理器初始化完成')
+      })
+      
+      // 设置定时同步时间
+      const [hour, minute] = (settings.syncTime || '12:00').split(':').map(Number)
+      syncManager.setSyncTime(hour || 12, minute || 0)
+      
+      setSyncInitialized(true)
+    }
+  }, [syncInitialized, settings.syncTime, syncManager])
+
   const handleSaveSettings = (newSettings: Settings): void => {
     setSettings(newSettings)
     localStorage.setItem('calendar-settings', JSON.stringify(newSettings))
+    
+    // 更新定时同步时间
+    if (newSettings.syncTime) {
+      const [hour, minute] = newSettings.syncTime.split(':').map(Number)
+      syncManager.setSyncTime(hour || 12, minute || 0)
+    }
+    
     // 透明度现在通过 CSS 控制，不需要调用 Electron API
   }
 
@@ -707,7 +733,10 @@ function App(): JSX.Element {
             })
         }, 0)
       } else {
-        // 无飞书 ID → 创建飞书日程（由 SyncManager.initialize 自动处理）
+        // 无飞书 ID → 创建飞书日程
+        setTimeout(() => {
+          syncManager.syncCreateToFeishu(eventData)
+        }, 0)
       }
     } else {
       // ⭐ 新建模式：创建本地数据
@@ -720,7 +749,10 @@ function App(): JSX.Element {
       setEvents(updated)
       saveEventsToLocalStorage(updated)
       
-      // 新建日程由 SyncManager.initialize() 自动扫描无 feishuEventId 的事件同步
+      // ⭐ 新建日程加入同步队列
+      setTimeout(() => {
+        syncManager.syncCreateToFeishu(newEvent)
+      }, 0)
     }
     
     // 关闭表单
